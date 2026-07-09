@@ -2,6 +2,7 @@
 import "./globals.css";
 import Image from "next/image";
 import CommandPalette from "./components/CommandPalette";
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata = {
   title: "STIMS | Micro-Utility Software Engine",
@@ -81,6 +82,7 @@ export default function RootLayout({ children }) {
         {/* Dynamic Page Target Content Slot */}
         <main className="relative z-10">
           {children}
+          <Analytics />
         </main>
       </body>
     </html>
