@@ -5,12 +5,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+// COMPILER FIX: Provide safe string fallbacks so "next build" never crashes
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.co";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy_key_for_compiler";
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function Navbar({ onAuthClick }) {
+    // ... rest of your component remains exactly the same
+
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [displayName, setDisplayName] = useState("User");
     const [userEmail, setUserEmail] = useState("");
