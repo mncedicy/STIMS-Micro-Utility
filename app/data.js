@@ -5,9 +5,9 @@ export const projectSuite = [
         tagline: "Fleet Carbon Analytics",
         category: "Logistics",
         apiUsed: "Carbon Interface API",
-        image: "/tools/ecoroute.png", // Path targeting our glassy icon  asset
+        image: "/tools/ecoroute.png", // Path targeting our glassy icon asset
         description: "Automated mileage-to-emissions translation engine built specifically for independent local courier services seeking green compliance tax credits.",
-        link: "ecoroute.stims.co.za"
+        link: "https://ecoroute.stims.co.za" // FIXED: Added https:// protocol prefix
     },
     {
         title: "MedTime",

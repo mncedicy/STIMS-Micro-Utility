@@ -84,7 +84,7 @@ export default function Grid() {
                                 <span className="text-slate-600">Core Architecture:</span> {project.apiUsed}
                             </div>
                             <a
-                                href={project.link}
+                                href={project.link.startsWith('http') ? project.link : `https://${project.link}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex w-full justify-center items-center bg-slate-950 border border-slate-800 hover:border-blue-500/40 hover:bg-blue-950/20 hover:text-blue-500 text-slate-300 font-medium text-xs py-2 px-3 rounded-lg transition-all duration-200"
@@ -94,6 +94,7 @@ export default function Grid() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
                             </a>
+
                         </div>
                     </div>
                 ))}
