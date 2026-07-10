@@ -2,8 +2,8 @@
 import os from 'os';
 import { Resend } from 'resend';
 
-// ALERT SWITCH: Set to true to stop emails temporarily. Change to false to turn them back on.
-const DISABLE_EMAIL_ALERTS = false;
+// READ FROM .ENV: Converts the string value to a real true/false boolean
+const DISABLE_EMAIL_ALERTS = process.env.DISABLE_EMAIL_ALERTS === 'true';
 
 const resendKey = process.env.RESEND_API_KEY;
 const resend = resendKey ? new Resend(resendKey) : null;
