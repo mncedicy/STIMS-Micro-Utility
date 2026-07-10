@@ -2,6 +2,33 @@
 import React from 'react';
 import Image from 'next/image';
 
+const STATUS_CONFIG = {
+    Offline: {
+        dotClass: 'bg-rose-300/60 group-hover:bg-rose-600/60',
+        textClass: 'text-rose-400',
+        bgPulse: 'bg-rose-500',
+        titleClass: 'text-white/80 group-hover:text-rose-400',
+    },
+    Active: {
+        dotClass: 'bg-emerald-200/50 group-hover:bg-emerald-500/70',
+        textClass: 'text-emerald-400',
+        bgPulse: 'bg-emerald-500',
+        titleClass: 'text-white group-hover:text-emerald-500',
+    },
+    Maintenance: {
+        dotClass: 'bg-amber-300/50 group-hover:bg-amber-500/90',
+        textClass: 'text-amber-400',
+        bgPulse: 'bg-amber-500',
+        titleClass: 'text-white/90 group-hover:text-amber-400',
+    },
+    Beta: {
+        dotClass: 'bg-blue-300/60 group-hover:bg-blue-500/40',
+        textClass: 'text-blue-400',
+        bgPulse: 'bg-blue-500',
+        titleClass: 'text-white group-hover:text-blue-400',
+    }
+};
+
 export default function Grid({ initialNodesWithHealth = [] }) {
     return (
         <section className="max-w-6xl mx-auto px-6 pb-24 relative z-10">
@@ -15,9 +42,16 @@ export default function Grid({ initialNodesWithHealth = [] }) {
                 {initialNodesWithHealth.map((project, index) => {
                     const isNodeOnline = project.health?.online ?? true;
 
+                    // Determine the active key configuration
+                    const currentStatus = !isNodeOnline
+                        ? 'Offline'
+                        : (project.status === 'Active' || project.status === 'Maintenance' ? project.status : 'Beta');
+
+                    const config = STATUS_CONFIG[currentStatus];
+
                     return (
                         <div
-                            key={index}
+                            key={project.id || index}
                             className={`group relative bg-slate-900/40 border rounded-xl p-5 flex flex-col justify-between overflow-hidden shadow-sm transition-all duration-300 ease-out stims-hover-glow ${isNodeOnline ? 'border-slate-900' : 'border-rose-950/60 bg-rose-950/5'
                                 }`}
                         >
@@ -32,36 +66,35 @@ export default function Grid({ initialNodesWithHealth = [] }) {
 
                                 {/* Reduced Header Overlay Section */}
                                 <div className="absolute top-4 left-4 right-4 flex justify-between items-center border-b border-slate-900/40 pb-1 z-20">
+                                    {/* Decorative Window Dots */}
                                     <div className="flex space-x-1">
-                                        <div className={`h-1 w-1 rounded-full ${isNodeOnline ? 'bg-slate-800 group-hover:bg-blue-500/40' : 'bg-rose-900'} transition-colors`} />
-                                        <div className={`h-1 w-1 rounded-full ${isNodeOnline ? 'bg-slate-800 group-hover:bg-blue-500/40' : 'bg-rose-900'} transition-colors`} />
-                                        <div className={`h-1 w-1 rounded-full ${isNodeOnline ? 'bg-slate-800 group-hover:bg-blue-500/40' : 'bg-rose-900'} transition-colors`} />
+                                        {[1, 2, 3].map((dot) => (
+                                            <div
+                                                key={dot}
+                                                className={`h-1 w-1 rounded-full ${config.dotClass} transition-colors`}
+                                            />
+                                        ))}
                                     </div>
 
-                                    {/* Swapped version tag for simple ONLINE/OFFLINE text indicator */}
-                                    {isNodeOnline ? (
-                                        <span className="text-[9px] font-mono text-emerald-500 font-bold tracking-wider flex items-center space-x-1">
-                                            <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
-                                            <span>ONLINE</span>
-                                        </span>
-                                    ) : (
-                                        <span className="text-[9px] font-mono text-rose-400 font-bold tracking-wider flex items-center space-x-1 animate-pulse">
-                                            <span className="h-1 w-1 rounded-full bg-rose-500" />
-                                            <span>OFFLINE</span>
-                                        </span>
-                                    )}
+                                    {/* Status Badge */}
+                                    <span className={`text-[10px] font-mono uppercase tracking-wider select-none font-bold flex items-center gap-1.5 ${config.textClass}`}>
+                                        <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${config.bgPulse}`} />
+                                        <span>{!isNodeOnline ? "Offline" : (project.status || "Active")}</span>
+                                    </span>
                                 </div>
 
                                 {/* Full-width Image Asset Frame */}
                                 <div className="relative w-full h-full pt-10 px-2 flex items-center justify-center">
-                                    <Image
-                                        src={project.image}
-                                        alt={project.title}
-                                        fill
-                                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                        className="object-cover mix-blend-screen opacity-60 group-hover:opacity-90 group-hover:scale-102 transition-all duration-500 ease-out filter drop-shadow-[0_0_15px_rgba(59,130,246,0.15)]"
-                                        loading="lazy"
-                                    />
+                                    {project.image && (
+                                        <Image
+                                            src={project.image}
+                                            alt={project.title}
+                                            fill
+                                            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                            className="object-cover mix-blend-screen opacity-60 group-hover:opacity-90 group-hover:scale-102 transition-all duration-500 ease-out filter drop-shadow-[0_0_15px_rgba(59,130,246,0.15)]"
+                                            loading="lazy"
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Blending transparent mask that ends cleanly at the bottom */}
@@ -70,17 +103,16 @@ export default function Grid({ initialNodesWithHealth = [] }) {
 
                             {/* Main Foreground Text Content */}
                             <div className="relative z-10 pt-28">
-                                {/* Title and Category tag positioned inline side-by-side */}
-                                <div className="flex items-baseline justify-between mb-1.5">
-                                    <h3 className={`text-base font-bold transition-colors duration-200 ${isNodeOnline ? 'text-white group-hover:text-blue-500' : 'text-white/90 group-hover:text-rose-400'
-                                        }`}>
+                                <div className="flex items-start justify-between mb-1.5 gap-2">
+                                    <h3 className={`text-base font-bold transition-colors duration-200 ${config.titleClass}`}>
                                         {project.title}
                                     </h3>
 
-                                    {/* Category tag moved to the right side of the title */}
-                                    <span className="bg-slate-950/90 border border-slate-800 text-[9px] font-mono px-2 py-0.5 rounded text-slate-400 uppercase tracking-wider select-none">
-                                        {project.category}
-                                    </span>
+                                    <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                                        <span className="bg-slate-950/90 border mt-1.5 border-slate-800 text-[9px] font-mono px-2 py-0.5 rounded text-slate-400 uppercase tracking-wider select-none">
+                                            {project.category}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 <p className="text-[11px] text-slate-400 font-mono mb-3 italic">
@@ -100,7 +132,7 @@ export default function Grid({ initialNodesWithHealth = [] }) {
 
                                 {isNodeOnline ? (
                                     <a
-                                        href={project.link.startsWith('http') ? project.link : `https://${project.link}`}
+                                        href={project.link ? (project.link.startsWith('http') ? project.link : `https://${project.link}`) : '#'}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="inline-flex w-full justify-center items-center border font-medium text-xs py-2 px-3 rounded-lg transition-all duration-200 bg-slate-950 border-slate-800 hover:border-blue-500/40 hover:bg-blue-950/20 hover:text-blue-500 text-slate-300"
