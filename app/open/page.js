@@ -6,7 +6,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function OpenAnalyticsPage() {
     const liveStats = await fetchLiveSystemTelemetry();
-    const liveDbVolume = await fetchLiveDatabaseMetrics();
+    let liveDbVolume = await fetchLiveDatabaseMetrics();
+
+    // Safe check: If the database value fails or returns NaN, show a clean zero or a default count
+    if (!liveDbVolume || liveDbVolume === "NaN") {
+        liveDbVolume = "0";
+    }
 
     const metricsList = [
         { name: "Total Messages Saved", value: liveDbVolume },
@@ -28,11 +33,11 @@ export default async function OpenAnalyticsPage() {
 
                 <header className="border-b border-slate-900 pb-6 mb-12 flex flex-col sm:flex-row sm:justify-between sm:items-end space-y-4 sm:space-y-0">
                     <div>
-                        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">Live Telemetry</span>
+                        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">Live Data</span>
                         <h1 className="text-3xl font-bold text-white mt-1 tracking-tight">System Metrics</h1>
                     </div>
                     <div className="text-xs font-mono text-slate-500">
-                        stims.co.za // Live Data
+                        stims.co.za // Current Numbers
                     </div>
                 </header>
 
@@ -59,7 +64,7 @@ export default async function OpenAnalyticsPage() {
                                         <span className="text-white font-bold">{tool.title}</span>
                                         <span className="text-slate-400">{tool.percentage}</span>
                                     </div>
-                                    <div className="w-full bg-slate-950 border border-slate-900 h-2 rounded-full overflow-hidden">
+                                    <div className="w-full bg-slate-950 border border-slate-800 h-2 rounded-full overflow-hidden">
                                         <div className={`h-full bg-blue-500 rounded-full ${tool.width}`} />
                                     </div>
                                 </div>
@@ -67,10 +72,11 @@ export default async function OpenAnalyticsPage() {
                         </div>
                     </div>
 
+                    {/* FIXED: Changed Ecosystem Info to use very simple English without any technical words */}
                     <div className="bg-slate-900/30 border border-slate-900 rounded-xl p-6 backdrop-blur-sm space-y-4">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 border-b border-slate-900 pb-2">Ecosystem Info</h3>
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 border-b border-slate-900 pb-2">About This Page</h3>
                         <p className="text-xs text-slate-400 leading-relaxed">
-                            This page updates live. It reads usage numbers from your Supabase database and queries your local South African server cluster hardware specifications directly.
+                            This page updates every time you open it. It displays the total count of messages sent through our contact form and shows how much memory and speed our local computer system is using right now.
                         </p>
                     </div>
                 </section>

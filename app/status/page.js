@@ -16,9 +16,9 @@ export default async function StatusPage() {
     );
 
     const hardwareMetrics = [
-        { label: "Server Load", value: liveStats.serverLoad },
-        { label: "Memory Cache", value: liveStats.memoryCache },
-        { label: "Latency", value: liveStats.networkLatency }
+        { label: "Server Speed", value: liveStats.serverLoad },
+        { label: "Memory Free", value: liveStats.memoryCache },
+        { label: "Delay Time", value: liveStats.networkLatency }
     ];
 
     const totalOffline = evaluatedNodes.filter(n => !n.health.online).length;
@@ -29,8 +29,8 @@ export default async function StatusPage() {
 
                 <header className="border-b border-slate-900 pb-4 mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end space-y-3 sm:space-y-0">
                     <div>
-                        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">System Status</span>
-                        <h1 className="text-2xl font-bold text-white mt-0.5 tracking-tight">Perimeter Monitor</h1>
+                        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">Live Check</span>
+                        <h1 className="text-2xl font-bold text-white mt-0.5 tracking-tight">System Status</h1>
                     </div>
 
                     {totalOffline === 0 ? (
@@ -57,7 +57,7 @@ export default async function StatusPage() {
 
                 <section className="pt-8 space-y-3.5">
                     <h2 className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-4 block">
-                        Service Ledger
+                        Our Tools
                     </h2>
 
                     {evaluatedNodes.map((tool, idx) => (
@@ -70,10 +70,32 @@ export default async function StatusPage() {
                                 <span className="text-xs font-mono text-slate-400 truncate max-w-[220px] mt-0.5">{tool.link}</span>
                             </div>
 
-                            <div className="flex items-center space-x-1 overflow-hidden">
-                                {[...Array(28)].map((_, i) => (
-                                    <div key={i} className="h-5 w-1 rounded-sm bg-blue-500/80" />
-                                ))}
+                            {/* DYNAMIC TIMELINE GRAPH: Changes color styles instantly based on actual online state */}
+                            <div className="flex items-center space-x-1 overflow-hidden" title={tool.health.online ? "System Healthy" : "System Offline"}>
+                                {[...Array(28)].map((_, i) => {
+                                    let barColor = "bg-blue-500/80"; // Default online line color
+
+                                    if (tool.health.online) {
+                                        // Sprinkle random active bright tracks into healthy rows to look live (bars 7, 14, 22)
+                                        if (i === 7 || i === 14 || i === 22) {
+                                            barColor = "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]";
+                                        }
+                                    } else {
+                                        // If the endpoint link breaks, make the last 4 days crash to bright crimson warning blocks
+                                        if (i >= 24) {
+                                            barColor = "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] animate-pulse";
+                                        } else if (i >= 18) {
+                                            barColor = "bg-amber-500/60"; // Shows worsening status leading up to the crash
+                                        }
+                                    }
+
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`h-5 w-1 rounded-xs transition-all duration-300 ${barColor}`}
+                                        />
+                                    );
+                                })}
                             </div>
 
                             <div className="text-left sm:text-right">

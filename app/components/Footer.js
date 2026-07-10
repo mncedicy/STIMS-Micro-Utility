@@ -4,19 +4,13 @@ import Image from 'next/image';
 
 export default function Footer() {
     return (
-        <footer className="relative border-t border-slate-900 bg-slate-950/60 pt-12 pb-8 z-10">
-            <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-slate-900/60">
+        <footer className="relative border-t border-slate-900 bg-slate-950/60 pt-16 pb-12 z-10 font-mono">
+            <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-8 pb-12 border-b border-slate-900/60">
 
                 {/* Brand Logo and Description */}
                 <div className="md:col-span-4 space-y-3">
                     <a href="/" className="inline-block hover:opacity-80 transition-opacity">
-                        <Image
-                            src="/logo.png"
-                            alt="STIMS Logo"
-                            width={110}
-                            height={44}
-                            className="object-contain"
-                        />
+                        <Image src="/logo.png" alt="STIMS Logo" width={110} height={44} className="object-contain" />
                     </a>
                     <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
                         A single place for fast web tools. Our links load instantly to process your data without any slowdowns.
@@ -31,6 +25,8 @@ export default function Footer() {
                         <li><a href="/#contact" className="text-slate-400 hover:text-blue-500 transition-colors">Contact</a></li>
                         <li><a href="/status" className="text-slate-400 hover:text-blue-500 transition-colors">System Status</a></li>
                         <li><a href="/open" className="text-slate-400 hover:text-blue-500 transition-colors">Live Metrics</a></li>
+                        {/* NEW CHANGELOG LINK ADDED HERE */}
+                        <li><a href="/changelog" className="text-slate-400 hover:text-blue-500 transition-colors font-bold">What's New (Changelog)</a></li>
                     </ul>
                 </div>
 

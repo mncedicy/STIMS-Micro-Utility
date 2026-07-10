@@ -5,7 +5,7 @@ export default function About() {
     return (
         <section id="about" className="max-w-4xl mx-auto px-6 py-20 relative z-10 border-t border-slate-900">
             <div className="text-center mb-12">
-                <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">01 // Our Tools</span>
+                <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">Our Tools</span>
                 <h2 className="text-3xl font-bold text-white mt-2 tracking-tight">How We Help You</h2>
             </div>
 

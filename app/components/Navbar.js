@@ -5,15 +5,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 
-// COMPILER FIX: Provide safe string fallbacks so "next build" never crashes
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://supabase.co";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "dummy_key_for_compiler";
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function Navbar({ onAuthClick }) {
-    // ... rest of your component remains exactly the same
-
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [displayName, setDisplayName] = useState("User");
     const [userEmail, setUserEmail] = useState("");
@@ -21,7 +18,6 @@ export default function Navbar({ onAuthClick }) {
     const dropdownRef = useRef(null);
 
     useEffect(() => {
-        // 1. Read local storage first for instant state update
         if (typeof window !== 'undefined') {
             const cachedActive = localStorage.getItem('stims_session_active');
             const cachedName = localStorage.getItem('stims_user_name');
@@ -31,7 +27,6 @@ export default function Navbar({ onAuthClick }) {
             }
         }
 
-        // 2. Backup verification against live Supabase Auth profile API
         const verifyLiveSession = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
@@ -44,7 +39,6 @@ export default function Navbar({ onAuthClick }) {
                 }
                 localStorage.setItem('stims_session_active', 'true');
             } else {
-                // If Supabase confirms there is no session, clean out everything
                 setIsLoggedIn(false);
                 if (typeof window !== 'undefined') {
                     localStorage.removeItem('stims_session_active');
@@ -54,7 +48,6 @@ export default function Navbar({ onAuthClick }) {
         };
         verifyLiveSession();
 
-        // 3. Keep state tracking active during provider switches
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (session?.user) {
                 setIsLoggedIn(true);
@@ -92,12 +85,10 @@ export default function Navbar({ onAuthClick }) {
         setIsLoggedIn(false);
         setDisplayName("User");
         setUserEmail("");
-
         if (typeof window !== 'undefined') {
             localStorage.removeItem('stims_session_active');
             localStorage.removeItem('stims_user_name');
         }
-
         await supabase.auth.signOut();
     };
 
@@ -120,7 +111,6 @@ export default function Navbar({ onAuthClick }) {
                 <div className="flex items-center space-x-3 text-xs font-mono font-bold relative" ref={dropdownRef}>
                     {isLoggedIn ? (
                         <>
-                            {/* Profile Target Button - Displays user's name immediately after login */}
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
                                 className="flex items-center space-x-2 text-slate-300 hover:text-white transition-colors cursor-pointer py-1.5 px-3 rounded-md border border-slate-900 bg-slate-950/40 select-none font-sans"
@@ -133,12 +123,18 @@ export default function Navbar({ onAuthClick }) {
                             </button>
 
                             {dropdownOpen && (
-                                <div className="absolute right-0 top-full mt-2 w-44 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 overflow-hidden z-50 animate-fade-in">
-                                    {userEmail && (
-                                        <div className="px-3 py-2 text-[9px] text-slate-500 border-b border-slate-800/60 truncate font-mono">
-                                            {userEmail}
-                                        </div>
-                                    )}
+                                <div className="absolute right-0 top-full mt-2 w-44 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 overflow-hidden z-50 animate-fade-in font-mono text-xs">
+                                    {/* FIXED: Added a working link to the Dashboard page */}
+                                    <a
+                                        href="/dashboard"
+                                        onClick={() => setDropdownOpen(false)}
+                                        className="block px-3 py-2 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                                    >
+                                        Account Dashboard
+                                    </a>
+                                    <div className="px-3 py-1.5 text-[9px] text-slate-500 border-b border-slate-800/60 truncate">
+                                        {userEmail}
+                                    </div>
                                     <button
                                         onClick={handleSignOut}
                                         className="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-colors cursor-pointer flex items-center justify-between font-mono"

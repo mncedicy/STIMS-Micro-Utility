@@ -1,0 +1,109 @@
+// app/dashboard/page.js
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
+export default function DashboardPage() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [displayName, setDisplayName] = useState("User");
+
+    useEffect(() => {
+        const checkUserSession = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUser(user);
+                // Grab the first name from your Supabase registration metadata
+                const firstName = user.user_metadata?.first_name;
+                if (firstName) setDisplayName(firstName);
+            }
+            setLoading(false);
+        };
+        checkUserSession();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="min-h-[60vh] flex items-center justify-center text-xs font-mono text-slate-500">
+                Loading your profile...
+            </div>
+        );
+    }
+
+    // If a visitor tries to open this page without logging in, show a simple block message
+    if (!user) {
+        return (
+            <div className="min-h-[60vh] flex items-center justify-center p-6">
+                <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-xl p-6 text-center shadow-xl">
+                    <h3 className="text-base font-bold text-white mb-2">Access Denied</h3>
+                    <p className="text-xs text-slate-400 mb-4 font-sans">You need to log in first to see your account dashboard.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 pt-16 px-6 pb-24 relative z-10">
+            <div className="max-w-4xl mx-auto">
+
+                {/* Dashboard Title Header Banner */}
+                <header className="border-b border-slate-900 pb-6 mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end space-y-2 sm:space-y-0">
+                    <div>
+                        <span className="text-[10px] font-mono tracking-widest text-blue-500 uppercase">User Workspace</span>
+                        <h1 className="text-2xl font-bold text-white mt-0.5 tracking-tight">Welcome, {displayName}!</h1>
+                    </div>
+                    <div className="text-xs font-mono text-slate-500">
+                        Account Active
+                    </div>
+                </header>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+
+                    {/* Left Column Box: Secure Account Details Card */}
+                    <div className="bg-slate-900/30 border border-slate-900 rounded-xl p-5 backdrop-blur-sm space-y-4">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 border-b border-slate-900 pb-2">Your Profile</h3>
+                        <div className="space-y-2 text-xs font-sans">
+                            <div>
+                                <span className="block text-[10px] font-mono text-slate-500 uppercase">First Name</span>
+                                <span className="text-white font-medium">{displayName}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] font-mono text-slate-500 uppercase">Surname</span>
+                                <span className="text-white font-medium">{user.user_metadata?.surname || "Not added"}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] font-mono text-slate-500 uppercase">Email Address</span>
+                                <span className="text-white font-medium font-mono text-[11px]">{user.email}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column Box: Saved Tools & Usage Summary Ledger */}
+                    <div className="md:col-span-2 bg-slate-900/10 border border-slate-900 rounded-xl p-6 backdrop-blur-sm space-y-6">
+                        <div>
+                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Saved Apps</h3>
+                            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-4 text-xs text-slate-500 font-sans text-center">
+                                You have not pinned any favorited tools yet. Head over to our home page grid to launch a tool.
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Message Logs</h3>
+                            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-4 text-xs text-slate-500 font-sans text-center">
+                                No contact submissions found matching your active session.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    );
+}
