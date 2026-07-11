@@ -15,7 +15,7 @@ export default function SubscriptionCard({ userId, userEmail, appTitle, strategy
         setErrorMsg("");
 
         if (!userId || !userEmail) {
-            setErrorMsg("Please log into your user account first to upgrade.");
+            setErrorMsg("Please log into your user account first  to upgrade.");
             return;
         }
 

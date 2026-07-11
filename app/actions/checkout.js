@@ -107,9 +107,10 @@ export async function verifyLocalTransactionSession(referenceToken, expectedAppI
             return { success: true };
         }
 
+
         return { success: false };
     } catch (err) {
-        console.error("🚨 Server Callback Exception:", err.message);
+        console.error("🚨 Server Callback Exception: ", err.message);
         return { success: false };
     }
 }

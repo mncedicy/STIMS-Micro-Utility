@@ -99,7 +99,7 @@ export async function POST(req) {
             if (error) {
                 console.error(`🚨 Paystack Subscription Downgrade Failure: ${error.message}`);
             } else {
-                console.log(`📉 STIMS Ledger Updated: Subscription [${paystackSubCode}] disabled and downgraded to free.`);
+                console.log(`📉 STIMS Ledger Updated : Subscription [${paystackSubCode}] disabled and downgraded to free.`);
             }
             break;
         }
