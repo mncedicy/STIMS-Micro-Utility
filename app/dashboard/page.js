@@ -3,6 +3,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { projectSuite } from '../data';
+import { verifyLocalTransactionSession } from '../actions/checkout';
+import SubscriptionCard from '../components/SubscriptionCard';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,15 +16,46 @@ export default function DashboardPage() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [displayName, setDisplayName] = useState("User");
+    const [activeSubscriptions, setActiveSubscriptions] = useState({});
 
     useEffect(() => {
         const checkUserSession = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 setUser(user);
-                // Grab the first name from your Supabase registration metadata
                 const firstName = user.user_metadata?.first_name;
                 if (firstName) setDisplayName(firstName);
+
+                // 1. Fetch current active items straight from our database tracking matrix
+                const { data: subs } = await supabase
+                    .from('user_subscriptions')
+                    .select('app_id, status, tier')
+                    .eq('user_id', user.id)
+                    .eq('status', 'active');
+
+                const subMap = {};
+                if (subs) {
+                    subs.forEach(s => { subMap[s.app_id] = s.tier; });
+                }
+
+                // 2. INTERCEPT PAYSTACK CALLBACKS: Check url queries for active transaction reference keys
+                const urlParams = new URLSearchParams(window.location.search);
+                const referenceToken = urlParams.get('trxref') || urlParams.get('reference');
+                const targetAppId = urlParams.get('stims_app_id');
+
+                if (referenceToken && targetAppId && !subMap[targetAppId]) {
+                    setLoading(true);
+                    // Force a secure server-side verification check
+                    const verificationResult = await verifyLocalTransactionSession(referenceToken, targetAppId, user.id);
+
+                    if (verificationResult.success) {
+                        subMap[targetAppId] = 'premium';
+                        // Clean the url query string parameters cleanly so reloads don't re-trigger verification calls
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                }
+
+                setActiveSubscriptions(subMap);
             }
             setLoading(false);
         };
@@ -31,12 +65,11 @@ export default function DashboardPage() {
     if (loading) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center text-xs font-mono text-slate-500">
-                Loading your profile...
+                Synchronizing your secure workspace...
             </div>
         );
     }
 
-    // If a visitor tries to open this page without logging in, show a simple block message
     if (!user) {
         return (
             <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -50,7 +83,7 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 pt-16 px-6 pb-24 relative z-10">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-6xl mx-auto">
 
                 {/* Dashboard Title Header Banner */}
                 <header className="border-b border-slate-900 pb-6 mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end space-y-2 sm:space-y-0">
@@ -59,14 +92,14 @@ export default function DashboardPage() {
                         <h1 className="text-2xl font-bold text-white mt-0.5 tracking-tight">Welcome, {displayName}!</h1>
                     </div>
                     <div className="text-xs font-mono text-slate-500">
-                        Account Active
+                        stims.co.za // Account Active
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
                     {/* Left Column Box: Secure Account Details Card */}
-                    <div className="bg-slate-900/30 border border-slate-900 rounded-xl p-5 backdrop-blur-sm space-y-4">
+                    <div className="lg:col-span-3 bg-slate-900/30 border border-slate-900 rounded-xl p-5 backdrop-blur-sm space-y-4">
                         <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 border-b border-slate-900 pb-2">Your Profile</h3>
                         <div className="space-y-2 text-xs font-sans">
                             <div>
@@ -85,7 +118,34 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Right Column Box: Saved Tools & Usage Summary Ledger */}
-                    <div className="md:col-span-2 bg-slate-900/10 border border-slate-900 rounded-xl p-6 backdrop-blur-sm space-y-6">
+                    <div className="lg:col-span-9 bg-slate-900/10 border border-slate-900 rounded-xl p-6 backdrop-blur-sm space-y-8">
+
+                        {/* Dynamic Ecosystem Access Matrix */}
+                        <div>
+                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-4">Ecosystem Access Matrix</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {projectSuite.map((project, idx) => {
+                                    let queryAppId = project.title.toLowerCase().replace(/\s+/g, '');
+                                    if (queryAppId === "trafficinfringements") queryAppId = "fines";
+
+                                    const hasActiveSubscription = activeSubscriptions[queryAppId] === 'premium';
+
+                                    return (
+                                        <SubscriptionCard
+                                            key={idx}
+                                            userId={user.id}
+                                            userEmail={user.email}
+                                            appTitle={project.title}
+                                            strategy={project.monetizationStrategy}
+                                            fee={project.monetizationFee}
+                                            type={project.monetization}
+                                            isActiveSubscription={hasActiveSubscription}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         <div>
                             <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Saved Apps</h3>
                             <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-4 text-xs text-slate-500 font-sans text-center">
