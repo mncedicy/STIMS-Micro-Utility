@@ -136,7 +136,7 @@ export const projectSuite = [
     //     tagline: "Smart Traffic Infringement Management System",
     //     category: "Transportation",
     //     status: "Beta",
-    //     apiUsed: "stimsApi + OCR Engine",
+    //     apiUsed: "stimsApi + OCR Engine.",
     //     image: "/tools/EcoRoute.jpeg", // Synced to your local JPEG file
     //     description: "A Smart Traffic Infringement Management System (TIMS) for handwritten tickets is a digital bridging solution that converts paper-based Section 56.",
     //     link: "https://fines.stims.co.za",
