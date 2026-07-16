@@ -21,7 +21,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-500 selection:text-slate-950 antialiased">
-      {/* <Hero /> */}
+      <Hero />
       <Grid initialNodesWithHealth={dynamicNodesWithHealth} />
       <About />
       <Contact />
