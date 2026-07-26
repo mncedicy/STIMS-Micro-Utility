@@ -10,13 +10,14 @@ const CONFIGS = {
     Active: { dot: 'bg-cyan-300/60', text: 'text-cyan-400', pulse: 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]', title: 'group-hover:text-cyan-400' }
 };
 
-export default function SubscriptionCard({ userId, userEmail, appTitle, strategy, fee, type, isActiveSubscription, subdomainUrl }) {
+export default function SubscriptionCard({ userId, userEmail, user, appTitle, strategy, fee, type, isActiveSubscription, subdomainUrl }) {
     const [isPending, startTransition] = useTransition();
     const [errorMsg, setErrorMsg] = useState("");
 
     const isFree = type === "Free";
     const statusKey = isActiveSubscription ? 'Active' : type;
     const c = CONFIGS[statusKey] || CONFIGS.Paid;
+
 
     const handleUpgrade = () => {
         if (isFree || isActiveSubscription || fee === "Custom Quote") return;
@@ -34,7 +35,7 @@ export default function SubscriptionCard({ userId, userEmail, appTitle, strategy
         if (isNaN(cents) || cents <= 0) return setErrorMsg("Invalid fee metadata.");
 
         startTransition(async () => {
-            const res = await generatePaymentLink(userId, appId, cents, userEmail);
+            const res = await generatePaymentLink(userId, user, appId, cents, userEmail);
             if (res?.success && res?.url) window.location.href = res.url;
             else setErrorMsg(res?.error || "Checkout session failed.");
         });

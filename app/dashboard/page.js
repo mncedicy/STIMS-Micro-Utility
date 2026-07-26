@@ -92,6 +92,7 @@ export default function DashboardPage() {
                                             key={idx}
                                             userId={user.id}
                                             userEmail={user.email}
+                                            user={user}
                                             appTitle={project.title}
                                             strategy={project.monetizationStrategy}
                                             fee={project.monetizationFee}

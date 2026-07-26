@@ -20,6 +20,9 @@ export async function POST(req) {
             return NextResponse.json({ success: false, error: "Missing parameters." }, { status: 400, headers: corsHeaders });
         }
 
+        const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
+
+
         const response = await fetch('https://api.paystack.co/transaction/initialize', {
             method: 'POST',
             headers: {
@@ -30,7 +33,7 @@ export async function POST(req) {
                 email: userEmail,
                 amount: amount,
                 currency: 'ZAR',
-                callback_url: `http://localhost:3001/?stims_app_id=${appId}`,
+                callback_url: `${callbackUrl}?stims_app_id=${appId}`,
                 metadata: { user_id: userId, app_id: appId, tier: 'premium' }
             }),
             cache: 'no-store'
