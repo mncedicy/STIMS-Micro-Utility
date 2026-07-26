@@ -66,7 +66,7 @@ export async function POST(req) {
                         tier: tier,
                         status: 'active',
                         stripe_customer_id: eventData.customer?.customer_code || null,
-                        stripe_subscription_id: eventData.subscription_code || eventData.reference || null,
+                        stripe_subscription_id: eventData.subscription_code || eventData.reference || `one-time-${eventData.id}`,
                         updated_at: new Date().toISOString()
                     },
                     { onConflict: 'user_id,app_id' }
