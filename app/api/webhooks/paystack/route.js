@@ -53,22 +53,17 @@ export async function POST(req) {
                 break;
             }
 
-            // EXTRACT CORRECT SUBSCRIPTION CODE (SUB_xxxx):
-            // Prioritize tracking fields that specifically yield unique customer subscription instances
+            // DYNAMIC SUBSCRIPTION CODE CAPTURE MATRICES:
+            // Explicitly extracts and locks onto the strict unique user subscription_code string sequence
             let resolvedSubscriptionToken = null;
 
             if (eventData.subscription_code) {
-                // Populates natively during subscription events or direct payload roots
                 resolvedSubscriptionToken = eventData.subscription_code;
-            } else if (eventData.subscription) {
-                // Triggers when subscription code is passed as an implicit field/string value
-                resolvedSubscriptionToken = typeof eventData.subscription === 'string'
-                    ? eventData.subscription
-                    : (eventData.subscription?.subscription_code || null);
+            } else if (eventData.subscription?.subscription_code) {
+                resolvedSubscriptionToken = eventData.subscription.subscription_code;
             }
 
-            // Fallback cleanly to your processing references string only if it is a flat, non-recurring product sale.
-            // Notice we do NOT check eventData.plan.plan_code here anymore, preventing the template PLN_ text overwrite!
+            // Fallback path strictly bound to flat, one-time sales items if no recurring code fields populate
             if (!resolvedSubscriptionToken) {
                 resolvedSubscriptionToken = eventData.reference || `one-time-${eventData.id}`;
             }
