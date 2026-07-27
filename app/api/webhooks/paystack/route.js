@@ -42,31 +42,18 @@ export async function POST(req) {
     const eventData = payload.data;
 
     switch (event) {
-        case 'charge.success':
-        case 'subscription.create': {
+        case 'charge.success': {
             const userId = eventData.metadata?.user_id;
             const appId = eventData.metadata?.app_id;
             const tier = eventData.metadata?.tier || 'premium';
 
             if (!userId || !appId) {
-                console.error("🚨 Paystack Hook: Empty tracking parameters metadata.");
+                console.error("🚨 Paystack Hook: Empty tracking parameters metadata inside charge.success.");
                 break;
             }
 
-            // DYNAMIC SUBSCRIPTION CODE CAPTURE MATRICES:
-            // Explicitly extracts and locks onto the strict unique user subscription_code string sequence
-            let resolvedSubscriptionToken = null;
-
-            if (eventData.subscription_code) {
-                resolvedSubscriptionToken = eventData.subscription_code;
-            } else if (eventData.subscription?.subscription_code) {
-                resolvedSubscriptionToken = eventData.subscription.subscription_code;
-            }
-
-            // Fallback path strictly bound to flat, one-time sales items if no recurring code fields populate
-            if (!resolvedSubscriptionToken) {
-                resolvedSubscriptionToken = eventData.reference || `one-time-${eventData.id}`;
-            }
+            // Extract subscription identifier if attached to transaction object, fallback to processing reference string
+            const resolvedToken = eventData.subscription_code || eventData.reference || `one-time-${eventData.id}`;
 
             const { error } = await supabaseAdmin
                 .from('user_subscriptions')
@@ -77,13 +64,68 @@ export async function POST(req) {
                         tier: tier,
                         status: 'active',
                         stripe_customer_id: eventData.customer?.customer_code || null,
-                        stripe_subscription_id: resolvedSubscriptionToken.trim(),
+                        stripe_subscription_id: resolvedToken.trim(),
                         updated_at: new Date().toISOString()
                     },
                     { onConflict: 'user_id,app_id' }
                 );
 
-            if (error) console.error(`🚨 Paystack DB Sync Error: ${error.message}`);
+            if (error) console.error(`🚨 Paystack charge.success DB Sync Error: ${error.message}`);
+            break;
+        }
+
+        case 'subscription.create': {
+            const paystackSubCode = eventData.subscription_code;
+            const customerCode = eventData.customer?.customer_code;
+            const planCode = eventData.plan?.plan_code;
+            const paystackEmailToken = eventData.email_token || null;
+
+            if (!paystackSubCode || !customerCode || !planCode) {
+                console.error("🚨 Paystack Hook: Missing core subscription parameters inside subscription.create payload.");
+                break;
+            }
+
+            // STEP A: Map the incoming plan_code to locate the target multi-tenant app_id from the application register
+            const { data: targetApp, error: appErr } = await supabaseAdmin
+                .from('applications')
+                .select('app_id')
+                .eq('paystack_plan_id', planCode)
+                .maybeSingle();
+
+            if (appErr || !targetApp) {
+                console.error(`🚨 Paystack Hook: Could not resolve app registration mapping for Plan Code: ${planCode}`);
+                break;
+            }
+
+            // STEP B: Find the unique subscription record previously initialized by charge.success via the customer code match
+            const { data: activeSub, error: subFindErr } = await supabaseAdmin
+                .from('user_subscriptions')
+                .select('id, user_id')
+                .eq('stripe_customer_id', customerCode)
+                .eq('app_id', targetApp.app_id)
+                .maybeSingle();
+
+            if (subFindErr || !activeSub) {
+                console.error(`🚨 Paystack Hook: No ledger row found matching customer: ${customerCode} for app: ${targetApp.app_id}`);
+                break;
+            }
+
+            // STEP C: Overwrite the fallback transaction reference code with the true Subscription Code (SUB_xxxx) 
+            // and log the billing token safely to support Paystack remote API cancellations
+            const { error: finalSyncError } = await supabaseAdmin
+                .from('user_subscriptions')
+                .update({
+                    stripe_subscription_id: paystackSubCode.trim(),
+                    paystack_email_token: paystackEmailToken, // FIXED: Corrected syntax comment mapping
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', activeSub.id);
+
+            if (finalSyncError) {
+                console.error(`🚨 Paystack Hook: Failed to lock subscription_code into user row ledger - ${finalSyncError.message}`);
+            } else {
+                console.log(`[Paystack Webhook Sync Success]: Locked subscription ${paystackSubCode} to user ID ${activeSub.user_id}`);
+            }
             break;
         }
 
