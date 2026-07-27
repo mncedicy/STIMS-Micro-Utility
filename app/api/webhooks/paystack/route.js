@@ -3,10 +3,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// CRITICAL COMPILER FIX: Tells Next.js to skip pre-rendering optimization loops 
-// and handle this route as a dynamic server-side background worker channel.
-export const dynamic = 'force-dynamic';
-
 export async function POST(req) {
     let rawBody;
     let paystackSignature;
@@ -57,6 +53,25 @@ export async function POST(req) {
                 break;
             }
 
+            // CRITICAL BILLING FIX: Safely parse and extract the absolute true Paystack subscription token key (SUB_xxxxx)
+            // across all possible webhook events to eliminate reference-string overwrites.
+            let resolvedSubscriptionToken = null;
+
+            if (eventData.subscription_code) {
+                resolvedSubscriptionToken = eventData.subscription_code;
+            } else if (eventData.plan?.plan_code) {
+                // If nested inside invoice transactions payload bounds, extract plan identifiers or tokens
+                resolvedSubscriptionToken = eventData.plan.plan_code;
+            } else if (payload.event === 'charge.success' && eventData.plan) {
+                // Check common multi-tenant object nesting variables
+                resolvedSubscriptionToken = eventData.subscription || null;
+            }
+
+            // Fallback cleanly to your processing references string only if it is a flat, non-recurring product sale
+            if (!resolvedSubscriptionToken) {
+                resolvedSubscriptionToken = eventData.reference || `one-time-${eventData.id}`;
+            }
+
             const { error } = await supabaseAdmin
                 .from('user_subscriptions')
                 .upsert(
@@ -66,7 +81,7 @@ export async function POST(req) {
                         tier: tier,
                         status: 'active',
                         stripe_customer_id: eventData.customer?.customer_code || null,
-                        stripe_subscription_id: eventData.subscription_code || eventData.reference || `one-time-${eventData.id}`,
+                        stripe_subscription_id: resolvedSubscriptionToken.trim(),
                         updated_at: new Date().toISOString()
                     },
                     { onConflict: 'user_id,app_id' }
@@ -80,14 +95,15 @@ export async function POST(req) {
             const paystackSubCode = eventData.subscription_code;
             if (!paystackSubCode) break;
 
+            // Updated status parameters to match standard cancellation strings
             const { error } = await supabaseAdmin
                 .from('user_subscriptions')
                 .update({
                     tier: 'free',
-                    status: 'canceled',
+                    status: 'cancelled',
                     updated_at: new Date().toISOString()
                 })
-                .eq('stripe_subscription_id', paystackSubCode);
+                .eq('stripe_subscription_id', paystackSubCode.trim());
 
             if (error) console.error(`🚨 Paystack Subscription Disable Error: ${error.message}`);
             break;
