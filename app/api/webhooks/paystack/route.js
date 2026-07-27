@@ -53,21 +53,22 @@ export async function POST(req) {
                 break;
             }
 
-            // CRITICAL BILLING FIX: Safely parse and extract the absolute true Paystack subscription token key (SUB_xxxxx)
-            // across all possible webhook events to eliminate reference-string overwrites.
+            // EXTRACT CORRECT SUBSCRIPTION CODE (SUB_xxxx):
+            // Prioritize tracking fields that specifically yield unique customer subscription instances
             let resolvedSubscriptionToken = null;
 
             if (eventData.subscription_code) {
+                // Populates natively during subscription events or direct payload roots
                 resolvedSubscriptionToken = eventData.subscription_code;
-            } else if (eventData.plan?.plan_code) {
-                // If nested inside invoice transactions payload bounds, extract plan identifiers or tokens
-                resolvedSubscriptionToken = eventData.plan.plan_code;
-            } else if (payload.event === 'charge.success' && eventData.plan) {
-                // Check common multi-tenant object nesting variables
-                resolvedSubscriptionToken = eventData.subscription || null;
+            } else if (eventData.subscription) {
+                // Triggers when subscription code is passed as an implicit field/string value
+                resolvedSubscriptionToken = typeof eventData.subscription === 'string'
+                    ? eventData.subscription
+                    : (eventData.subscription?.subscription_code || null);
             }
 
-            // Fallback cleanly to your processing references string only if it is a flat, non-recurring product sale
+            // Fallback cleanly to your processing references string only if it is a flat, non-recurring product sale.
+            // Notice we do NOT check eventData.plan.plan_code here anymore, preventing the template PLN_ text overwrite!
             if (!resolvedSubscriptionToken) {
                 resolvedSubscriptionToken = eventData.reference || `one-time-${eventData.id}`;
             }
@@ -95,7 +96,6 @@ export async function POST(req) {
             const paystackSubCode = eventData.subscription_code;
             if (!paystackSubCode) break;
 
-            // Updated status parameters to match standard cancellation strings
             const { error } = await supabaseAdmin
                 .from('user_subscriptions')
                 .update({
