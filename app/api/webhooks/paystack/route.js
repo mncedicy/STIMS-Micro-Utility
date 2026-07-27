@@ -43,17 +43,59 @@ export async function POST(req) {
 
     switch (event) {
         case 'charge.success': {
-            const userId = eventData.metadata?.user_id;
-            const appId = eventData.metadata?.app_id;
+            let userId = eventData.metadata?.user_id;
+            let appId = eventData.metadata?.app_id;
             const tier = eventData.metadata?.tier || 'premium';
 
+            const customerEmail = eventData.customer?.email;
+            const planCode = eventData.plan?.plan_code;
+
+            // RECOVERY MATRIX: If Paystack clears the metadata layer inside plan transaction pipelines,
+            // query database structures dynamically to resolve the target app_id and user profile records natively.
+            if ((!userId || !appId) && customerEmail && planCode) {
+                // STEP A: Locate the matching app_id identifier mapped to this plan code inside our register
+                const { data: appDetails } = await supabaseAdmin
+                    .from('applications')
+                    .select('app_id')
+                    .eq('paystack_plan_id', planCode)
+                    .maybeSingle();
+
+                if (appDetails) {
+                    appId = appDetails.app_id;
+                }
+
+                // STEP B: Trace the user identity by cross-referencing the billing email parameter string
+                const { data: userProfile } = await supabaseAdmin
+                    .from('profiles')
+                    .select('id')
+                    .ilike('email', customerEmail.trim())
+                    .maybeSingle();
+
+                if (userProfile) {
+                    userId = userProfile.id;
+                }
+            }
+
             if (!userId || !appId) {
-                console.error("🚨 Paystack Hook: Empty tracking parameters metadata inside charge.success.");
+                console.error(`🚨 Paystack Hook: Unable to resolve identity bounds for client email: ${customerEmail} / Plan: ${planCode}`);
                 break;
             }
 
-            // Extract subscription identifier if attached to transaction object, fallback to processing reference string
-            const resolvedToken = eventData.subscription_code || eventData.reference || `one-time-${eventData.id}`;
+            // NESTING CORRECTION FLOW: Prioritizes Paystack's structural subscription object properties block
+            let resolvedSubscriptionToken = null;
+            let resolvedEmailToken = null;
+
+            if (eventData.subscription?.subscription_code) {
+                resolvedSubscriptionToken = eventData.subscription.subscription_code;
+                resolvedEmailToken = eventData.subscription.email_token || null;
+            } else if (eventData.subscription_code) {
+                resolvedSubscriptionToken = eventData.subscription_code;
+            }
+
+            // Flat-rate product fallbacks
+            if (!resolvedSubscriptionToken) {
+                resolvedSubscriptionToken = eventData.reference || `one-time-${eventData.id}`;
+            }
 
             const { error } = await supabaseAdmin
                 .from('user_subscriptions')
@@ -64,7 +106,8 @@ export async function POST(req) {
                         tier: tier,
                         status: 'active',
                         stripe_customer_id: eventData.customer?.customer_code || null,
-                        stripe_subscription_id: resolvedToken.trim(),
+                        stripe_subscription_id: resolvedSubscriptionToken.trim(),
+                        paystack_email_token: resolvedEmailToken,
                         updated_at: new Date().toISOString()
                     },
                     { onConflict: 'user_id,app_id' }
@@ -85,7 +128,6 @@ export async function POST(req) {
                 break;
             }
 
-            // STEP A: Map the incoming plan_code to locate the target multi-tenant app_id from the application register
             const { data: targetApp, error: appErr } = await supabaseAdmin
                 .from('applications')
                 .select('app_id')
@@ -97,7 +139,6 @@ export async function POST(req) {
                 break;
             }
 
-            // STEP B: Find the unique subscription record previously initialized by charge.success via the customer code match
             const { data: activeSub, error: subFindErr } = await supabaseAdmin
                 .from('user_subscriptions')
                 .select('id, user_id')
@@ -110,13 +151,11 @@ export async function POST(req) {
                 break;
             }
 
-            // STEP C: Overwrite the fallback transaction reference code with the true Subscription Code (SUB_xxxx) 
-            // and log the billing token safely to support Paystack remote API cancellations
             const { error: finalSyncError } = await supabaseAdmin
                 .from('user_subscriptions')
                 .update({
                     stripe_subscription_id: paystackSubCode.trim(),
-                    paystack_email_token: paystackEmailToken, // FIXED: Corrected syntax comment mapping
+                    paystack_email_token: paystackEmailToken,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', activeSub.id);
