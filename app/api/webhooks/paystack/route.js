@@ -38,6 +38,8 @@ export async function POST(req) {
     }
 
     const payload = JSON.parse(rawBody);
+    console.log("📦 COMPLETE PAYSTACK PAYLOAD:", JSON.stringify(payload, null, 2));
+
     const event = payload.event;
     const eventData = payload.data;
 
@@ -80,8 +82,11 @@ export async function POST(req) {
             const planCode = eventData.plan?.plan_code;
             const paystackEmailToken = eventData.email_token || null;
 
-            if (!paystackSubCode || !customerCode || !planCode) {
-                console.error("🚨 Paystack Hook: Missing core subscription parameters inside subscription.create payload.");
+            // FIXED: Fetch the persistent user_id from the customer profile metadata object
+            const userId = eventData.customer?.metadata?.user_id;
+
+            if (!paystackSubCode || !userId || !planCode) {
+                console.error("🚨 Paystack Hook: Missing core subscription parameters or user_id inside subscription.create payload.");
                 break;
             }
 
@@ -97,34 +102,23 @@ export async function POST(req) {
                 break;
             }
 
-            // STEP B: Find the unique subscription record previously initialized by charge.success via the customer code match
-            const { data: activeSub, error: subFindErr } = await supabaseAdmin
-                .from('user_subscriptions')
-                .select('id, user_id')
-                .eq('stripe_customer_id', customerCode)
-                .eq('app_id', targetApp.app_id)
-                .maybeSingle();
-
-            if (subFindErr || !activeSub) {
-                console.error(`🚨 Paystack Hook: No ledger row found matching customer: ${customerCode} for app: ${targetApp.app_id}`);
-                break;
-            }
-
-            // STEP C: Overwrite the fallback transaction reference code with the true Subscription Code (SUB_xxxx) 
-            // and log the billing token safely to support Paystack remote API cancellations
+            // FIXED STEP B & C: Eliminate brittle customer code string matching. 
+            // Target the unique ledger row cleanly using the compound unique identifiers (user_id + app_id)
             const { error: finalSyncError } = await supabaseAdmin
                 .from('user_subscriptions')
                 .update({
                     stripe_subscription_id: paystackSubCode.trim(),
-                    paystack_email_token: paystackEmailToken, // FIXED: Corrected syntax comment mapping
+                    stripe_customer_id: customerCode, // Ensure final permanent customer code is recorded
+                    paystack_email_token: paystackEmailToken,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', activeSub.id);
+                .eq('user_id', userId)
+                .eq('app_id', targetApp.app_id);
 
             if (finalSyncError) {
                 console.error(`🚨 Paystack Hook: Failed to lock subscription_code into user row ledger - ${finalSyncError.message}`);
             } else {
-                console.log(`[Paystack Webhook Sync Success]: Locked subscription ${paystackSubCode} to user ID ${activeSub.user_id}`);
+                console.log(`[Paystack Webhook Sync Success]: Locked subscription ${paystackSubCode} to user ID ${userId}`);
             }
             break;
         }
