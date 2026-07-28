@@ -1,4 +1,3 @@
-// app/api/webhooks/paystack/route.js
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
@@ -38,6 +37,8 @@ export async function POST(req) {
     }
 
     const payload = JSON.parse(rawBody);
+
+    // DEBUG LOG ENGINE: Prints the exact JSON structure into your Vercel deployment runtime logs
     console.log("📦 COMPLETE PAYSTACK PAYLOAD:", JSON.stringify(payload, null, 2));
 
     const event = payload.event;
@@ -82,11 +83,19 @@ export async function POST(req) {
             const planCode = eventData.plan?.plan_code;
             const paystackEmailToken = eventData.email_token || null;
 
-            // FIXED: Fetch the persistent user_id from the customer profile metadata object
-            const userId = eventData.customer?.metadata?.user_id;
+            // 1. EXTRACTION STRATEGY A: Direct lookup from metadata object
+            let userId = eventData.customer?.metadata?.user_id;
 
-            if (!paystackSubCode || !userId || !planCode) {
-                console.error("🚨 Paystack Hook: Missing core subscription parameters or user_id inside subscription.create payload.");
+            // 2. EXTRACTION STRATEGY B: Look inside array structure for old customer migrations
+            if (!userId && eventData.customer?.metadata?.custom_fields) {
+                const userIdField = eventData.customer.metadata.custom_fields.find(
+                    (field) => field.variable_name === 'user_id'
+                );
+                if (userIdField) userId = userIdField.value;
+            }
+
+            if (!paystackSubCode || !customerCode || !planCode) {
+                console.error("🚨 Paystack Hook: Missing core subscription parameters inside subscription.create payload.");
                 break;
             }
 
@@ -102,13 +111,32 @@ export async function POST(req) {
                 break;
             }
 
-            // FIXED STEP B & C: Eliminate brittle customer code string matching. 
-            // Target the unique ledger row cleanly using the compound unique identifiers (user_id + app_id)
+            // 3. FAILSAFE BACKUP METHOD: If user_id wasn't in the customer payload (existing profiles), 
+            // query the db row built previously by the charge.success webhook event using customerCode
+            if (!userId) {
+                console.warn(`⚠️ Paystack Hook: user_id missing in customer metadata object. Resolving via database record reference...`);
+
+                const { data: matchedSub, error: lookUpError } = await supabaseAdmin
+                    .from('user_subscriptions')
+                    .select('user_id')
+                    .eq('stripe_customer_id', customerCode)
+                    .eq('app_id', targetApp.app_id)
+                    .maybeSingle();
+
+                if (lookUpError || !matchedSub) {
+                    console.error(`🚨 Paystack Hook: Recovery lookup completely failed for Customer Code: ${customerCode}`);
+                    break;
+                }
+
+                userId = matchedSub.user_id; // Securely recovered
+            }
+
+            // STEP B & C: Directly update the verified unique record matching user_id + app_id
             const { error: finalSyncError } = await supabaseAdmin
                 .from('user_subscriptions')
                 .update({
                     stripe_subscription_id: paystackSubCode.trim(),
-                    stripe_customer_id: customerCode, // Ensure final permanent customer code is recorded
+                    stripe_customer_id: customerCode,
                     paystack_email_token: paystackEmailToken,
                     updated_at: new Date().toISOString()
                 })
