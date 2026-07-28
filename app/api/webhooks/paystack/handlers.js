@@ -59,10 +59,29 @@ export async function handleSubscriptionCreate(supabaseAdmin, eventData, userId,
         .eq('app_id', resolvedAppId);
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
-    console.log(`🎉 [Webhook subscription.create Success]: Authority lock confirmed! Linked code: ${realSubscriptionCode}`);
+    console.log(`🎉 [Webhook subscription.create Success]: Linked code: ${realSubscriptionCode}`);
 }
 
-export async function handleSubscriptionDisable(supabaseAdmin, eventData) {
+// INTERCEPTS THE NOT_RENEW EVENT GIVEN BY CANCELLATION REQUESTS
+export async function handleSubscriptionNotRenew(supabaseAdmin, eventData, userId, resolvedAppId) {
+    const disablingSubCode = (eventData.subscription_code || eventData.code || "").trim();
+
+    const { error } = await supabaseAdmin
+        .from('user_subscriptions')
+        .update({
+            tier: 'free',
+            status: 'cancelled', // Flips local profile view to cancelled right away
+            cancel_reason: 'User initialized an active non-renewing subscription termination request.',
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('app_id', resolvedAppId);
+
+    if (error) throw new Error(`DB Update Error: ${error.message}`);
+    console.log(`[Webhook subscription.not_renew]: Flipped user ${userId} status cleanly to cancelled for sub: ${disablingSubCode}`);
+}
+
+export async function handleSubscriptionDisable(supabaseAdmin, eventData, userId, resolvedAppId) {
     const disablingSubCode = (eventData.subscription_code || "").trim();
 
     const { error } = await supabaseAdmin
@@ -70,18 +89,17 @@ export async function handleSubscriptionDisable(supabaseAdmin, eventData) {
         .update({
             tier: 'free',
             status: 'cancelled',
-            cancel_reason: 'User initialized remote cancellation request pipeline.',
+            cancel_reason: 'Subscription has reached its final period limit and is completely deactivated.',
             updated_at: new Date().toISOString()
         })
-        .eq('stripe_subscription_id', disablingSubCode);
+        .eq('user_id', userId)
+        .eq('app_id', resolvedAppId);
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
-    console.log(`[Webhook subscription.disable]: Cancelled contract code ${disablingSubCode}`);
+    console.log(`[Webhook subscription.disable]: Terminated contract code ${disablingSubCode} for user ${userId}`);
 }
 
-export async function handlePaymentFailure(supabaseAdmin, eventData, eventName) {
-    const faultingSubCode = (eventData.subscription_code || "").trim();
-
+export async function handlePaymentFailure(supabaseAdmin, eventData, eventName, userId, resolvedAppId) {
     const { error } = await supabaseAdmin
         .from('user_subscriptions')
         .update({
@@ -90,8 +108,9 @@ export async function handlePaymentFailure(supabaseAdmin, eventData, eventName) 
             cancel_reason: `Automatic recurring billing loop collection execution fault: ${eventName}`,
             updated_at: new Date().toISOString()
         })
-        .eq('stripe_subscription_id', faultingSubCode);
+        .eq('user_id', userId)
+        .eq('app_id', resolvedAppId);
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
-    console.log(`[Webhook payment failure]: Flagged contract code ${faultingSubCode} as cancelled due to ${eventName}`);
+    console.log(`[Webhook payment failure]: Flagged user ${userId} as cancelled due to ${eventName}`);
 }

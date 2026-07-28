@@ -1,11 +1,10 @@
-// src/app/api/webhooks/paystack/route.js
-
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import {
     handleChargeSuccess,
     handleSubscriptionCreate,
+    handleSubscriptionNotRenew,
     handleSubscriptionDisable,
     handlePaymentFailure
 } from './handlers';
@@ -32,7 +31,6 @@ export async function POST(req) {
         return NextResponse.json({ error: "Server misconfiguration." }, { status: 500 });
     }
 
-    // Verify webhook security signature
     const computedHash = crypto.createHmac('sha512', secretKey.trim()).update(rawBody).digest('hex');
     if (computedHash !== paystackSignature) {
         console.error("🚨 STIMS Billing: Paystack verification signature mismatch.");
@@ -57,7 +55,7 @@ export async function POST(req) {
         if (appRegister) resolvedAppId = appRegister.app_id;
     }
 
-    // IDENTITY RESOLUTION ENGINE
+    // USER IDENTITY MATRIX
     let userId = eventData.metadata?.user_id || eventData.customer?.metadata?.user_id;
 
     if (!userId && eventData.customer?.metadata?.custom_fields) {
@@ -91,7 +89,7 @@ export async function POST(req) {
         return NextResponse.json({ received: false, error: "Identity unresolvable" }, { status: 200 });
     }
 
-    // AUDIT LEDGER WRITER
+    // AUDIT LOG WRITER
     const { error: ledgerError } = await supabaseAdmin
         .from('billing_transactions_ledger')
         .insert({
@@ -109,7 +107,7 @@ export async function POST(req) {
 
     if (ledgerError) console.error(`🚨 History Ledger Audit Failure: ${ledgerError.message}`);
 
-    // BUSINESS LIFECYCLE ROUTER SWITCH
+    // ROUTER SWITCH
     try {
         switch (event) {
             case 'charge.success':
@@ -120,13 +118,18 @@ export async function POST(req) {
                 await handleSubscriptionCreate(supabaseAdmin, eventData, userId, resolvedAppId);
                 break;
 
+            case 'subscription.not_renew':
+                // MAPS REJECTION TO SECURE CANCELLATION HANDLER INSTANTLY
+                await handleSubscriptionNotRenew(supabaseAdmin, eventData, userId, resolvedAppId);
+                break;
+
             case 'subscription.disable':
-                await handleSubscriptionDisable(supabaseAdmin, eventData);
+                await handleSubscriptionDisable(supabaseAdmin, eventData, userId, resolvedAppId);
                 break;
 
             case 'invoice.payment_failed':
             case 'subscription.not_renewed':
-                await handlePaymentFailure(supabaseAdmin, eventData, event);
+                await handlePaymentFailure(supabaseAdmin, eventData, event, userId, resolvedAppId);
                 break;
 
             default:
