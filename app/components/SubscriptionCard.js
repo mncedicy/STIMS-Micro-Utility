@@ -77,7 +77,6 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
     const displayStatusLabel = appStatus !== "Active" ? appStatus : "Offline";
 
 
-
     return (
         <div className={`group relative bg-slate-900/40 border rounded-xl p-5 flex flex-col justify-between overflow-hidden shadow-sm transition-all duration-300 ease-out stims-hover-glow h-64 ${isActiveSubscription ? 'border-cyan-500/30 bg-cyan-950/5' : 'border-slate-900'}`}>
             <div className="absolute top-0 left-0 right-0 h-56 overflow-hidden select-none pointer-events-none z-0">
