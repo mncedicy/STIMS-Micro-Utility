@@ -76,6 +76,7 @@ export default function SubscriptionCard({ userId, userEmail, appTitle, strategy
                     {errorMsg && <div className="mb-2 text-[10px] font-mono text-rose-400 block whitespace-normal">⚠️ {errorMsg}</div>}
 
 
+
                     {isActiveSubscription || isFree ? (
                         <a href={subdomainUrl || "#"} target="_blank" rel="noopener noreferrer" className={`inline-flex w-full justify-center items-center border font-medium text-xs py-2 px-3 rounded-lg transition-all duration-200 bg-slate-950 group/btn ${isActiveSubscription ? 'border-cyan-500/30 text-cyan-400 hover:border-cyan-400' : 'border-slate-800 text-slate-300 hover:border-emerald-500/40'}`}>
                             {isActiveSubscription ? "Launch Workspace" : "Launch Free App"}
