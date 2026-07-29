@@ -62,7 +62,6 @@ export async function handleSubscriptionCreate(supabaseAdmin, eventData, userId,
     console.log(`🎉 [Webhook subscription.create Success]: Linked code: ${realSubscriptionCode}`);
 }
 
-// INTERCEPTS THE NOT_RENEW EVENT GIVEN BY CANCELLATION REQUESTS
 export async function handleSubscriptionNotRenew(supabaseAdmin, eventData, userId, resolvedAppId) {
     const disablingSubCode = (eventData.subscription_code || eventData.code || "").trim();
 
@@ -70,7 +69,7 @@ export async function handleSubscriptionNotRenew(supabaseAdmin, eventData, userI
         .from('user_subscriptions')
         .update({
             tier: 'free',
-            status: 'cancelled', // Flips local profile view to cancelled right away
+            status: 'cancelled',
             cancel_reason: 'User initialized an active non-renewing subscription termination request.',
             updated_at: new Date().toISOString()
         })
@@ -97,6 +96,40 @@ export async function handleSubscriptionDisable(supabaseAdmin, eventData, userId
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
     console.log(`[Webhook subscription.disable]: Terminated contract code ${disablingSubCode} for user ${userId}`);
+}
+
+// INSTALLED HANDLER FOR AUTO-RENEWAL PROCESSING
+export async function handleInvoiceUpdate(supabaseAdmin, eventData, userId, resolvedAppId) {
+    const invoiceStatus = (eventData.status || "").toLowerCase();
+
+    if (invoiceStatus !== 'success') {
+        console.log(`[Webhook invoice.update]: Invoice state is "${invoiceStatus}". Skipping database subscription extension.`);
+        return;
+    }
+
+    const paidAt = eventData.paid_at || new Date().toISOString();
+    const nextPeriodEnd = new Date(paidAt);
+    nextPeriodEnd.setDate(nextPeriodEnd.getDate() + 30);
+
+    const subscriptionCode = (eventData.subscription?.subscription_code || "").trim();
+
+    const { error } = await supabaseAdmin
+        .from('user_subscriptions')
+        .update({
+            status: 'active',
+            tier: 'premium',
+            plan_amount_cents: eventData.amount || 28000,
+            currency: eventData.currency || 'ZAR',
+            current_period_start: paidAt,
+            current_period_end: eventData.subscription?.next_payment_date || nextPeriodEnd.toISOString(),
+            cancel_reason: null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('app_id', resolvedAppId);
+
+    if (error) throw new Error(`DB Subscription Extension Error: ${error.message}`);
+    console.log(`🔁 [Webhook invoice.update Success]: Subscription auto-renew confirmed for user ${userId} on app ${resolvedAppId}. Contract: ${subscriptionCode}`);
 }
 
 export async function handlePaymentFailure(supabaseAdmin, eventData, eventName, userId, resolvedAppId) {

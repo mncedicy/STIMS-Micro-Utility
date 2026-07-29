@@ -1,19 +1,43 @@
-// app/status/page.js
 import React from 'react';
-import { projectSuite } from '../data';
 import { fetchLiveSystemTelemetry, pingSubdomainNode } from '../utils/telemetry';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StatusPage() {
     const liveStats = await fetchLiveSystemTelemetry();
 
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Fetch the live multi-tenant application entries catalog straight from the database
+    const { data: appsFromDb } = await supabaseAdmin
+        .from('applications')
+        .select('*');
+
+    const processedApps = appsFromDb || [];
+
+    // 1. Concurrently evaluate live network telemetry across all returned database registries
     const evaluatedNodes = await Promise.all(
-        projectSuite.map(async (tool) => {
-            const health = await pingSubdomainNode(tool.title, tool.link);
-            return { ...tool, health };
+        processedApps.map(async (tool) => {
+            const health = await pingSubdomainNode(tool.title, tool.app_link);
+            return {
+                ...tool,
+                link: tool.app_link,
+                health
+            };
         })
     );
+
+    // 2. SORTING ENGINE MATRICES:
+    // Prioritize 'Active' status configurations first, sorting everything else lower down the index order
+    const sortedNodes = evaluatedNodes.sort((a, b) => {
+        if (a.status === 'Active' && b.status !== 'Active') return -1;
+        if (a.status !== 'Active' && b.status === 'Active') return 1;
+        return 0; // Maintain natural row state if both elements have identical statuses
+    });
 
     const hardwareMetrics = [
         { label: "Server Speed", value: liveStats.serverLoad },
@@ -21,7 +45,7 @@ export default async function StatusPage() {
         { label: "Delay Time", value: liveStats.networkLatency }
     ];
 
-    const totalOffline = evaluatedNodes.filter(n => !n.health.online).length;
+    const totalOffline = sortedNodes.filter(n => !n.health.online).length;
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 pt-12 px-6 pb-24 relative">
@@ -60,7 +84,7 @@ export default async function StatusPage() {
                         Our Tools
                     </h2>
 
-                    {evaluatedNodes.map((tool, idx) => (
+                    {sortedNodes.map((tool, idx) => (
                         <div
                             key={idx}
                             className="bg-slate-900/20 border border-slate-900/40 rounded-xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0 transition-all duration-300 ease-out stims-hover-glow"
@@ -73,19 +97,17 @@ export default async function StatusPage() {
                             {/* DYNAMIC TIMELINE GRAPH: Changes color styles instantly based on actual online state */}
                             <div className="flex items-center space-x-1 overflow-hidden" title={tool.health.online ? "System Healthy" : "System Offline"}>
                                 {[...Array(28)].map((_, i) => {
-                                    let barColor = "bg-blue-500/80"; // Default online line color
+                                    let barColor = "bg-blue-500/80";
 
                                     if (tool.health.online) {
-                                        // Sprinkle random active bright tracks into healthy rows to look live (bars 7, 14, 22)
                                         if (i === 7 || i === 14 || i === 22) {
                                             barColor = "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]";
                                         }
                                     } else {
-                                        // If the endpoint link breaks, make the last 4 days crash to bright crimson warning blocks
                                         if (i >= 24) {
                                             barColor = "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] animate-pulse";
                                         } else if (i >= 18) {
-                                            barColor = "bg-amber-500/60"; // Shows worsening status leading up to the crash
+                                            barColor = "bg-amber-500/60";
                                         }
                                     }
 

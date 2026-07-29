@@ -8,7 +8,8 @@ import {
     handleSubscriptionCreate,
     handleSubscriptionNotRenew,
     handleSubscriptionDisable,
-    handlePaymentFailure
+    handlePaymentFailure,
+    handleInvoiceUpdate
 } from './handlers';
 
 export async function POST(req) {
@@ -45,7 +46,7 @@ export async function POST(req) {
     const event = payload.event;
     const eventData = payload.data;
 
-    let planCode = eventData.plan?.plan_code || eventData.plan_object?.plan_code;
+    let planCode = eventData.plan?.plan_code || eventData.plan_object?.plan_code || eventData.subscription?.plan?.plan_code;
     let resolvedAppId = eventData.metadata?.app_id || 'ecoroute';
 
     if (planCode && !eventData.metadata?.app_id) {
@@ -57,18 +58,14 @@ export async function POST(req) {
         if (appRegister) resolvedAppId = appRegister.app_id;
     }
 
-    // ========================================================================
-    // BULLETPROOF SYSTEM USER IDENTITY RESOLUTION MATRIX (ZERO-DATA RECOVERY)
-    // ========================================================================
-    let userId = eventData.metadata?.user_id || eventData.customer?.metadata?.user_id;
+    // IDENTITY ENGINE MATRIX
+    let userId = eventData.metadata?.user_id || eventData.customer?.metadata?.user_id || eventData.subscription?.customer?.metadata?.user_id;
 
-    // Failsafe Channel 1: Deep extraction from custom_fields array fallback parameters
     if (!userId && eventData.customer?.metadata?.custom_fields) {
         const userIdField = eventData.customer.metadata.custom_fields.find(f => f.variable_name === 'user_id');
         if (userIdField) userId = userIdField.value;
     }
 
-    // Failsafe Channel 2: Look into user_subscriptions row history for matched customer profile records
     if (!userId && eventData.customer?.customer_code) {
         const { data: matchedRowByCode } = await supabaseAdmin
             .from('user_subscriptions')
@@ -79,43 +76,23 @@ export async function POST(req) {
         if (matchedRowByCode) userId = matchedRowByCode.user_id;
     }
 
-    // Failsafe Channel 3 (NEW - PRIMARY BULLETPROOF FALLBACK):
-    // If the database was cleared out, extract the real customer email address 
-    // and match it directly against your public profiles table to instantly catch the user's UUID.
     if (!userId && eventData.customer?.email) {
-        const userEmailString = eventData.customer.email.trim().toLowerCase();
-
-        console.log(`🔍 [Failsafe Target Trace]: Sweeping profile registries for account email: ${userEmailString}`);
-
-        const { data: matchedProfileByEmail } = await supabaseAdmin
-            .from('profiles')
-            .select('id')
-            .eq('email', userEmailString) // Direct lookups against your public schema layout indices
+        const { data: subscriptionRecordEmailFallback } = await supabaseAdmin
+            .from('user_subscriptions')
+            .select('user_id')
+            .eq('app_id', resolvedAppId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
-
-        if (matchedProfileByEmail) {
-            userId = matchedProfileByEmail.id;
-            console.log(`✅ [Failsafe Recovery Success]: Isolated User UUID from registry email maps: ${userId}`);
-        } else {
-            // Failsafe Channel 4: Deep recovery fallback query mapping from subscription entries
-            const { data: subscriptionRecordEmailFallback } = await supabaseAdmin
-                .from('user_subscriptions')
-                .select('user_id')
-                .eq('app_id', resolvedAppId)
-                .order('updated_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            if (subscriptionRecordEmailFallback) userId = subscriptionRecordEmailFallback.user_id;
-        }
+        if (subscriptionRecordEmailFallback) userId = subscriptionRecordEmailFallback.user_id;
     }
 
-    // Master execution guard loop block
     if (!userId) {
-        console.error(`🚨 Paystack Webhook Error: Could not resolve target user identification context across all 4 recovery channels.`);
+        console.error(`🚨 Paystack Webhook Error: Could not resolve target user identification context.`);
         return NextResponse.json({ received: false, error: "Identity unresolvable" }, { status: 200 });
     }
 
-    // AUDIT LEDGER WRITER
+    // LEDGER AUDITING
     const { error: ledgerError } = await supabaseAdmin
         .from('billing_transactions_ledger')
         .insert({
@@ -123,7 +100,7 @@ export async function POST(req) {
             app_id: resolvedAppId,
             event_type: event,
             paystack_reference: eventData.reference || null,
-            paystack_subscription_code: eventData.subscription_code || null,
+            paystack_subscription_code: eventData.subscription_code || eventData.subscription?.subscription_code || null,
             amount_cents: eventData.amount || 0,
             currency: eventData.currency || 'ZAR',
             payment_channel: eventData.channel || null,
@@ -133,7 +110,7 @@ export async function POST(req) {
 
     if (ledgerError) console.error(`🚨 History Ledger Audit Failure: ${ledgerError.message}`);
 
-    // BUSINESS LIFECYCLE ROUTER SWITCH
+    // ROUTER ROUTINES SWITCH
     try {
         switch (event) {
             case 'charge.success':
@@ -150,6 +127,10 @@ export async function POST(req) {
 
             case 'subscription.disable':
                 await handleSubscriptionDisable(supabaseAdmin, eventData, userId, resolvedAppId);
+                break;
+
+            case 'invoice.update':
+                await handleInvoiceUpdate(supabaseAdmin, eventData, userId, resolvedAppId);
                 break;
 
             case 'invoice.payment_failed':

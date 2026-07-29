@@ -1,13 +1,33 @@
-// app/components/Contact.js
 "use client";
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { dispatchTransmission } from '../actions/contact';
-import { projectSuite } from '../data';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function Contact() {
     const [isPending, startTransition] = useTransition();
     const [status, setStatus] = useState({ success: null, message: "" });
+    const [tools, setTools] = useState([]); // Dynamic state holding application entries
+
+    // Fetch dynamic project catalog lists from the applications table on initial mount
+    useEffect(() => {
+        const fetchApplications = async () => {
+            const { data, error } = await supabase
+                .from('applications')
+                .select('title')
+                .order('title', { ascending: true });
+
+            if (!error && data) {
+                setTools(data);
+            }
+        };
+        fetchApplications();
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -66,7 +86,6 @@ export default function Contact() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {/* Topic Queue Dropdown with "Other" added */}
                         <div>
                             <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-2">Topic</label>
                             <select
@@ -77,11 +96,10 @@ export default function Contact() {
                                 <option value="API Proposals">New API Proposals</option>
                                 <option value="Rate Extensions">Support & Rate Limits</option>
                                 <option value="Node Feedback">General Feedback</option>
-                                <option value="Other">Other</option> {/* Added Other option */}
+                                <option value="Other">Other</option>
                             </select>
                         </div>
 
-                        {/* NEW: Optional Tool Dropdown menu */}
                         <div>
                             <label className="block text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-2">Tool (Optional)</label>
                             <select
@@ -90,7 +108,7 @@ export default function Contact() {
                                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-400 focus:outline-none focus:border-blue-500/50 transition-colors disabled:opacity-50"
                             >
                                 <option value="">None / Not Specified</option>
-                                {projectSuite.map((project, idx) => (
+                                {tools.map((project, idx) => (
                                     <option key={idx} value={project.title}>{project.title}</option>
                                 ))}
                             </select>

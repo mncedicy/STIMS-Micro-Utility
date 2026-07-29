@@ -1,11 +1,12 @@
-// app/dashboard/page.js
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { projectSuite } from '../data';
 import { verifyLocalTransactionSession } from '../actions/checkout';
-import SubscriptionCard from '../components/SubscriptionCard';
+import ProfileCard from '../components/dashboard/ProfileCard';
+import EcosystemGrid from '../components/dashboard/EcosystemGrid';
+import SavedApps from '../components/dashboard/SavedApps';
+import MessageLogs from '../components/dashboard/MessageLogs';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -17,42 +18,79 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [displayName, setDisplayName] = useState("User");
     const [activeSubscriptions, setActiveSubscriptions] = useState({});
+    const [dbProjects, setDbProjects] = useState([]);
+
+    const fetchFreshEcosystemData = useCallback(async (currentUserId) => {
+        if (!currentUserId) return;
+
+        const { data: appsData } = await supabase
+            .from('applications')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (appsData) setDbProjects(appsData);
+
+        const { data: subs } = await supabase
+            .from('user_subscriptions')
+            .select('app_id, status, tier')
+            .eq('user_id', currentUserId);
+
+        const subMap = {};
+        if (subs) {
+            subs.forEach(s => {
+                subMap[s.app_id] = (s.status === 'active' && s.tier === 'premium') ? 'premium' : 'free';
+            });
+        }
+        setActiveSubscriptions(subMap);
+    }, []);
 
     useEffect(() => {
-        const checkUserSession = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUser(user);
-                const firstName = user.user_metadata?.first_name;
+        let subscriptionsChannel;
+        let applicationsChannel;
+
+        const initializeSecureSessionAndRealtime = async () => {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (currentUser) {
+                setUser(currentUser);
+                const firstName = currentUser.user_metadata?.first_name;
                 if (firstName) setDisplayName(firstName);
 
-                const { data: subs } = await supabase
-                    .from('user_subscriptions')
-                    .select('app_id, status, tier')
-                    .eq('user_id', user.id)
-                    .eq('status', 'active');
-
-                const subMap = {};
-                if (subs) subs.forEach(s => { subMap[s.app_id] = s.tier; });
+                await fetchFreshEcosystemData(currentUser.id);
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const referenceToken = urlParams.get('trxref') || urlParams.get('reference');
                 const targetAppId = urlParams.get('stims_app_id');
 
-                if (referenceToken && targetAppId && !subMap[targetAppId]) {
-                    setLoading(true);
-                    const verificationResult = await verifyLocalTransactionSession(referenceToken, targetAppId, user.id);
+                if (referenceToken && targetAppId) {
+                    const verificationResult = await verifyLocalTransactionSession(referenceToken, targetAppId, currentUser.id);
                     if (verificationResult.success) {
-                        subMap[targetAppId] = 'premium';
                         window.history.replaceState({}, document.title, window.location.pathname);
+                        await fetchFreshEcosystemData(currentUser.id);
                     }
                 }
-                setActiveSubscriptions(subMap);
+
+                subscriptionsChannel = supabase
+                    .channel(`user-sub-changes-${currentUser.id}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_subscriptions', filter: `user_id=eq.${currentUser.id}` },
+                        () => fetchFreshEcosystemData(currentUser.id)
+                    ).subscribe();
+
+                applicationsChannel = supabase
+                    .channel('global-apps-catalog-changes')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'applications' },
+                        () => fetchFreshEcosystemData(currentUser.id)
+                    ).subscribe();
             }
             setLoading(false);
         };
-        checkUserSession();
-    }, []);
+
+        initializeSecureSessionAndRealtime();
+
+        return () => {
+            if (subscriptionsChannel) supabase.removeChannel(subscriptionsChannel);
+            if (applicationsChannel) supabase.removeChannel(applicationsChannel);
+        };
+    }, [fetchFreshEcosystemData]);
 
     if (loading) return <div className="min-h-[60vh] flex items-center justify-center text-xs font-mono text-slate-500">Synchronizing your secure workspace...</div>;
     if (!user) return <div className="min-h-[60vh] flex items-center justify-center p-6"><div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-xl p-6 text-center shadow-xl"><h3 className="text-base font-bold text-white mb-2">Access Denied</h3><p className="text-xs text-slate-400 mb-4 font-sans">You need to log in first to see your account dashboard.</p></div></div>;
@@ -69,51 +107,14 @@ export default function DashboardPage() {
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    <div className="lg:col-span-3 bg-slate-900/30 border border-slate-900 rounded-xl p-5 backdrop-blur-sm space-y-4">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 border-b border-slate-900 pb-2">Your Profile</h3>
-                        <div className="space-y-2 text-xs font-sans">
-                            <div><span className="block text-[10px] font-mono text-slate-500 uppercase">First Name</span><span className="text-white font-medium">{displayName}</span></div>
-                            <div><span className="block text-[10px] font-mono text-slate-500 uppercase">Surname</span><span className="text-white font-medium">{user.user_metadata?.surname || "Not added"}</span></div>
-                            <div><span className="block text-[10px] font-mono text-slate-500 uppercase">Email Address</span><span className="text-white font-medium font-mono text-[11px]">{user.email}</span></div>
-                        </div>
+                    <div className="lg:col-span-3">
+                        <ProfileCard displayName={displayName} userEmail={user.email} userSurname={user.user_metadata?.surname} />
                     </div>
 
                     <div className="lg:col-span-9 bg-slate-900/10 border border-slate-900 rounded-xl p-6 backdrop-blur-sm space-y-8">
-                        <div>
-                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-4">Ecosystem Access Matrix</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                                {projectSuite.map((project, idx) => {
-                                    let queryAppId = project.title.toLowerCase().replace(/\s+/g, '');
-                                    if (queryAppId === "trafficinfringements") queryAppId = "fines";
-                                    const hasActiveSubscription = activeSubscriptions[queryAppId] === 'premium';
-
-                                    return (
-                                        <SubscriptionCard
-                                            key={idx}
-                                            userId={user.id}
-                                            userEmail={user.email}
-                                            user={user}
-                                            appTitle={project.title}
-                                            strategy={project.monetizationStrategy}
-                                            fee={project.monetizationFee}
-                                            type={project.monetization}
-                                            isActiveSubscription={hasActiveSubscription}
-                                            subdomainUrl={project.link}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Saved Apps</h3>
-                            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-4 text-xs text-slate-500 font-sans text-center">You have not pinned any favorited tools yet. Head over to our home page grid to launch a tool.</div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 mb-3">Message Logs</h3>
-                            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-4 text-xs text-slate-500 font-sans text-center">No contact submissions found matching your active session.</div>
-                        </div>
+                        <EcosystemGrid dbProjects={dbProjects} activeSubscriptions={activeSubscriptions} user={user} />
+                        <SavedApps />
+                        <MessageLogs />
                     </div>
                 </div>
             </div>
