@@ -1,17 +1,22 @@
-// app/components/CommandPalette.js
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { projectSuite } from '../data';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function CommandPalette() {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const [tools, setTools] = useState([]); // Dynamic state holding applications data
     const inputRef = useRef(null);
     const resultsContainerRef = useRef(null);
 
-    // Global listener for shortcut combination keys and arrow navigation
+    // Global listener for shortcut combination keys
     useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -26,21 +31,36 @@ export default function CommandPalette() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    // Autofocus input box when modal pops open
+    // Fetch tools from the Supabase applications table when the palette opens
     useEffect(() => {
-        if (isOpen && inputRef.current) {
-            inputRef.current.focus();
+        if (isOpen) {
+            const fetchApplications = async () => {
+                const { data, error } = await supabase
+                    .from('applications')
+                    .select('*')
+                    .order('title', { ascending: true });
+
+                if (!error && data) {
+                    setTools(data);
+                }
+            };
+
+            fetchApplications();
+
+            if (inputRef.current) {
+                inputRef.current.focus();
+            }
             setSelectedIndex(0);
         } else {
             setSearch('');
         }
     }, [isOpen]);
 
-    // Filter project records dynamically based on input values
-    const filteredTools = projectSuite.filter(tool =>
-        tool.title.toLowerCase().includes(search.toLowerCase()) ||
-        tool.category.toLowerCase().includes(search.toLowerCase()) ||
-        tool.description.toLowerCase().includes(search.toLowerCase())
+    // Filter dynamic project records based on input search values
+    const filteredTools = tools.filter(tool =>
+        (tool.title || '').toLowerCase().includes(search.toLowerCase()) ||
+        (tool.category || '').toLowerCase().includes(search.toLowerCase()) ||
+        (tool.description || '').toLowerCase().includes(search.toLowerCase())
     );
 
     // Reset selected index when the search query updates
@@ -62,7 +82,7 @@ export default function CommandPalette() {
             e.preventDefault();
             const targetTool = filteredTools[selectedIndex];
             if (targetTool) {
-                const targetUrl = targetTool.link.startsWith('http') ? targetTool.link : `https://${targetTool.link}`;
+                const targetUrl = targetTool.app_link.startsWith('http') ? targetTool.app_link : `https://${targetTool.app_link}`;
                 window.open(targetUrl, '_blank', 'noopener,noreferrer');
                 setIsOpen(false);
             }
@@ -115,7 +135,7 @@ export default function CommandPalette() {
                             return (
                                 <a
                                     key={idx}
-                                    href={tool.link.startsWith('http') ? tool.link : `https://${tool.link}`}
+                                    href={tool.app_link.startsWith('http') ? tool.app_link : `https://${tool.app_link}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={() => setIsOpen(false)}

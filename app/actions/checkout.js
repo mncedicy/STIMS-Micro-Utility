@@ -8,7 +8,7 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-export async function generatePaymentLink(userId, appId, priceInCents, userEmail) {
+export async function generatePaymentLink(userId, user, appId, priceInCents, userEmail) {
     if (!process.env.PAYSTACK_SECRET_KEY) {
         return { success: false, error: "Gateway Error: PAYSTACK_SECRET_KEY is missing from environment." };
     }
@@ -18,18 +18,21 @@ export async function generatePaymentLink(userId, appId, priceInCents, userEmail
 
     try {
         // Generate the base callback URL path string dynamically based on server configurations
-        const baseSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-        const callbackTarget = `${baseSiteUrl}/dashboard?stims_app_id=${appId}`;
+        const callbackUrl = process.env.PAYSTACK_CALLBACK_URL;
 
         const payload = {
             email: cleanedEmail,
             amount: Math.round(priceInCents),
             currency: "ZAR",
-            callback_url: callbackTarget,
+            callback_url: `${callbackUrl}?stims_app_id=${appId}`,
+            plan: "PLN_ka0bww33swkznc9", // Optional: If you have a specific plan ID for recurring subscriptions
             metadata: {
                 user_id: userId,
                 app_id: appId,
-                tier: "premium"
+                tier: "premium",
+                name: user.user_metadata?.first_name,
+                surname: user.user_metadata?.surname,
+                company: user.user_metadata?.company
             }
         };
 

@@ -1,13 +1,36 @@
 "use client";
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { projectSuite } from '../data';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function Hero() {
     const ref = useRef(null);
     const [motion, setMotion] = useState('');
     const [glow, setGlow] = useState({ opacity: 0 });
-    const imgs = projectSuite.map(p => p.image);
+    const [imgs, setImgs] = useState([]); // Dynamic state holding marquee image URLs
+
+    // Fetch tool images straight from the database applications table on initial mount
+    useEffect(() => {
+        const fetchMarqueeImages = async () => {
+            const { data, error } = await supabase
+                .from('applications')
+                .select('image_url')
+                .order('created_at', { ascending: true });
+
+            if (!error && data) {
+                // Map the image_url column strings into our component array
+                const imageUrls = data.map(p => p.image_url).filter(Boolean);
+                setImgs(imageUrls);
+            }
+        };
+        fetchMarqueeImages();
+    }, []);
 
     const onMove = (e) => {
         if (!ref.current) return;
@@ -25,7 +48,7 @@ export default function Hero() {
 
                 {/* Upper Track */}
                 <div className="flex w-[200%] h-[50%] animate-[marquee_40s_linear_infinite] space-x-12 items-center border-b border-slate-900/10 overflow-hidden">
-                    {[...imgs, ...imgs].map((src, i) => (
+                    {imgs.length > 0 && [...imgs, ...imgs].map((src, i) => (
                         <div key={i} className="relative h-[95%] aspect-square shrink-0">
                             <img src={src} alt="" className="w-full h-full object-contain opacity-20" />
                         </div>
@@ -34,7 +57,7 @@ export default function Hero() {
 
                 {/* Lower Track */}
                 <div className="flex w-[200%] h-[50%] animate-[marqueeReverse_45s_linear_infinite] space-x-12 items-center overflow-hidden">
-                    {[...imgs, ...imgs].reverse().map((src, i) => (
+                    {imgs.length > 0 && [...imgs, ...imgs].reverse().map((src, i) => (
                         <div key={i} className="relative h-[95%] aspect-square shrink-0">
                             <img src={src} alt="" className="w-full h-full object-contain opacity-20" />
                         </div>
@@ -60,7 +83,6 @@ export default function Hero() {
                     <span className="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-600 bg-clip-text text-transparent">Micro-Utility Engine</span>
                 </h1>
 
-                {/* UPDATED: Clear, simple description describing the tools directly */}
                 <p className="text-xs sm:text-sm text-slate-400 max-w-lg leading-relaxed bg-slate-950/50 border border-slate-900/30 rounded-xl py-2 backdrop-blur-md px-3 shadow-xl">
                     A collection of single-purpose web tools built for absolute speed. These utilities process financial rates, logistics metrics, and data tracking pipelines instantly without any overhead.
                 </p>
