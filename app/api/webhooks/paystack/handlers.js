@@ -78,6 +78,14 @@ export async function handleSubscriptionNotRenew(supabaseAdmin, eventData, userI
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
     console.log(`[Webhook subscription.not_renew]: Flipped user ${userId} status cleanly to cancelled for sub: ${disablingSubCode}`);
+
+    // SET TO FALSE ON CANCELLATION
+    const { error: vehicleError } = await supabaseAdmin
+        .from('ecoroute_vehicles')
+        .update({ is_active: false })
+        .eq('user_id', userId);
+
+    if (vehicleError) console.error(`[Webhook subscription.not_renew] Vehicle Deactivation Error: ${vehicleError.message}`);
 }
 
 export async function handleSubscriptionDisable(supabaseAdmin, eventData, userId, resolvedAppId) {
@@ -96,6 +104,14 @@ export async function handleSubscriptionDisable(supabaseAdmin, eventData, userId
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
     console.log(`[Webhook subscription.disable]: Terminated contract code ${disablingSubCode} for user ${userId}`);
+
+    // SET TO FALSE ON CANCELLATION
+    const { error: vehicleError } = await supabaseAdmin
+        .from('ecoroute_vehicles')
+        .update({ is_active: false })
+        .eq('user_id', userId);
+
+    if (vehicleError) console.error(`[Webhook subscription.disable] Vehicle Deactivation Error: ${vehicleError.message}`);
 }
 
 // INSTALLED HANDLER FOR AUTO-RENEWAL PROCESSING
@@ -146,4 +162,12 @@ export async function handlePaymentFailure(supabaseAdmin, eventData, eventName, 
 
     if (error) throw new Error(`DB Update Error: ${error.message}`);
     console.log(`[Webhook payment failure]: Flagged user ${userId} as cancelled due to ${eventName}`);
+
+    // SET TO FALSE ON CANCELLATION
+    const { error: vehicleError } = await supabaseAdmin
+        .from('ecoroute_vehicles')
+        .update({ is_active: false })
+        .eq('user_id', userId);
+
+    if (vehicleError) console.error(`[Webhook payment failure] Vehicle Deactivation Error: ${vehicleError.message}`);
 }
