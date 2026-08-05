@@ -27,7 +27,6 @@ export async function POST(req) {
         }
 
         // DYNAMIC BASE URL EXTRACTION:
-        // Automatically extracts protocol + host (e.g., http://localhost:3000 or https://stims.co.za)
         const { origin: baseUrl } = new URL(req.url);
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
@@ -55,7 +54,7 @@ export async function POST(req) {
         const globalPlanIdToken = appConfig?.paystack_plan_id ? appConfig.paystack_plan_id.trim() : null;
 
         // Dispatches parameters natively over to Paystack transaction engines
-        const response = await fetch('https://api.paystack.co/transaction/initialize', {
+        const response = await fetch(process.env.PAYSTACK_INITIALIZE_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${secretKey.trim()}`,
