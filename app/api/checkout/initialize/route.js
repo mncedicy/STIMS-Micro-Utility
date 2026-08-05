@@ -55,7 +55,7 @@ export async function POST(req) {
         const globalPlanIdToken = appConfig?.paystack_plan_id ? appConfig.paystack_plan_id.trim() : null;
 
         // Dispatches parameters natively over to Paystack transaction engines
-        const response = await fetch('https://api.paystack.co/transaction/initialize', {
+        const response = await fetch(process.env.PAYSTACK_INITIALIZE_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${secretKey.trim()}`,
