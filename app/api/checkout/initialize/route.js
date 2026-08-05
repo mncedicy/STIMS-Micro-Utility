@@ -27,6 +27,7 @@ export async function POST(req) {
         }
 
         // DYNAMIC BASE URL EXTRACTION:
+        // Automatically extracts protocol + host (e.g., http://localhost:3000 or https://stims.co.za)
         const { origin: baseUrl } = new URL(req.url);
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
