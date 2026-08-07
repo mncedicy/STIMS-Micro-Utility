@@ -49,7 +49,7 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
                         userId,
                         userEmail,
                         appId,
-                        callbackUrl: `${window.location.origin}/dashboard?stims_app_id=${appId}` // Kept as callbackUrl
+                        callbackUrl: `${window.location.origin}?stims_app_id=${appId}` // Kept as callbackUrl
                     })
                 });
 
