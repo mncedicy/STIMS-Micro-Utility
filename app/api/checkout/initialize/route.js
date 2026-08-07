@@ -22,7 +22,12 @@ export async function POST(req) {
     );
 
     try {
-        const { userId, userEmail, appId, callbackUrl } = await req.json();
+        const body = await req.json();
+        const { userId, userEmail, appId } = body;
+
+        // Dynamic destructuring map to absorb either layout variable parameter type safely
+        const finalCallbackUrl = body.callbackUrl || body.callback_url;
+
         if (!userId || !userEmail || !appId) {
             return NextResponse.json({ success: false, error: "Missing parameters." }, { status: 400, headers: corsHeaders });
         }
@@ -53,7 +58,6 @@ export async function POST(req) {
         // ========================================================================
         // DYNAMIC MULTI-TENANT PLATFORM LOOKUP ENGINE
         // ========================================================================
-        // FIXED: Included monetization_type in the query columns select layer
         const { data: appConfig, error: appQueryError } = await supabaseAdmin
             .from('applications')
             .select('fee_amount_cents, paystack_plan_id, monetization_type')
@@ -64,8 +68,6 @@ export async function POST(req) {
             console.warn(`[Hub Billing Guard]: Database query trace warning: ${appQueryError.message}`);
         }
 
-        // FIXED: STRICT MONETIZATION TYPE VALIDATION LAYER
-        // Blocks initialization unless the application row states the platform type is explicitly 'Paid'
         if (appConfig?.monetization_type !== 'Paid') {
             return NextResponse.json({
                 success: false,
@@ -73,17 +75,15 @@ export async function POST(req) {
             }, { status: 403, headers: corsHeaders });
         }
 
-        // Rely solely on database rows instead of falling back to any payload value
         const dynamicAmount = appConfig?.fee_amount_cents;
 
-        // Validation check to make sure amount exists in the database before calling Paystack
         if (!dynamicAmount) {
             return NextResponse.json({ success: false, error: "Price allocation missing for this application configuration row." }, { status: 422, headers: corsHeaders });
         }
 
         const globalPlanIdToken = appConfig?.paystack_plan_id ? appConfig.paystack_plan_id.trim() : null;
 
-        // Dispatches parameters natively over to Paystack transaction engines
+        // UNTOUCHED & RESTORED FOR PERMANENT RETENTION:
         const response = await fetch(process.env.PAYSTACK_INITIALIZE_URL || "https://api.paystack.co/transaction/initialize", {
             method: 'POST',
             headers: {
@@ -94,7 +94,7 @@ export async function POST(req) {
                 email: userEmail.trim().toLowerCase(),
                 amount: dynamicAmount,
                 currency: 'ZAR',
-                callback_url: callbackUrl,
+                callback_url: finalCallbackUrl,
                 ...(globalPlanIdToken && { plan: globalPlanIdToken }),
 
                 metadata: {

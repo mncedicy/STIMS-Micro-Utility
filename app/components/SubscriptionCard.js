@@ -19,10 +19,7 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
     let appId = appTitle.toLowerCase().replace(/\s+/g, '');
     if (appId === "trafficinfringements") appId = "fines";
 
-    // Assert that the app must be Active in the database and responding to network pings to launch or upgrade
     const isAppLaunchable = appStatus === "Active" && isOnline !== false;
-
-
 
     const handleUpgrade = () => {
         if (isFree || isActiveSubscription || fee === "Custom Quote") return;
@@ -43,9 +40,6 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
             return;
         }
 
-        const cents = parseInt(fee.replace(/[^0-9]/g, ''), 10) * 100;
-        if (isNaN(cents) || cents <= 0) return setErrorMsg("Invalid fee metadata.");
-
         startTransition(async () => {
             try {
                 const response = await fetch('/api/checkout/initialize', {
@@ -55,11 +49,14 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
                         userId,
                         userEmail,
                         appId,
-                        amount: cents
+                        callbackUrl: `${window.location.origin}/dashboard?stims_app_id=${appId}` // Kept as callbackUrl
                     })
                 });
 
-
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Server responded with status ${response.status}`);
+                }
 
                 const res = await response.json();
                 if (res?.success && res?.url) {
@@ -73,12 +70,12 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
         });
     };
 
-    // FIXED: Safely parsing string variables to prevent syntax errors during compilation
     const parts = (fee || "").split(fee.includes('/') ? '/' : ' ');
     const priceStr = isFree ? "R0" : fee === "Custom Quote" ? "Quote" : (parts[0] || "");
     const periodStr = isFree ? "/ Always" : fee === "Custom Quote" ? " / Custom" : fee.includes('/') ? ` / ${parts[1] || 'month'}` : ` ${parts[1] || 'once'}`;
 
     const displayStatusLabel = appStatus !== "Active" ? appStatus : "Offline";
+
 
 
     return (
