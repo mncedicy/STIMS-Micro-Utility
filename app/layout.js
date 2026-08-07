@@ -7,6 +7,7 @@ import CommandPalette from "./components/CommandPalette";
 import Navbar from "./components/Navbar";
 import AuthModal from "./components/AuthModal";
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 export default function RootLayout({ children }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,6 +49,7 @@ export default function RootLayout({ children }) {
         <main className="relative z-10">
           {children}
           <Analytics />
+          <SpeedInsights />
         </main>
       </body>
     </html>
