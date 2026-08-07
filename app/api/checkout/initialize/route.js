@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
+// Using wildcard origin to accept requests from any port or environment smoothly
 const corsHeaders = {
-    'Access-Control-Allow-Origin': 'http://localhost:3001',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
@@ -21,14 +22,10 @@ export async function POST(req) {
     );
 
     try {
-        const { userId, userEmail, appId, amount } = await req.json();
-        if (!userId || !userEmail || !appId || !amount) {
+        const { userId, userEmail, appId, callbackUrl } = await req.json();
+        if (!userId || !userEmail || !appId) {
             return NextResponse.json({ success: false, error: "Missing parameters." }, { status: 400, headers: corsHeaders });
         }
-
-        // DYNAMIC BASE URL EXTRACTION:
-        // Automatically extracts protocol + host (e.g., http://localhost:3000 or https://stims.co.za)
-        const { origin: baseUrl } = new URL(req.url);
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!secretKey) {
@@ -37,12 +34,29 @@ export async function POST(req) {
         }
 
         // ========================================================================
+        // PROFILE ENGINE LOOKUP
+        // ========================================================================
+        const { data: profileConfig, error: profileQueryError } = await supabaseAdmin
+            .from('profiles')
+            .select('first_name, surname, company')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (profileQueryError) {
+            console.warn(`[Hub Billing Guard]: Profile data fetch warning: ${profileQueryError.message}`);
+        }
+
+        const targetName = profileConfig?.first_name?.trim() || "";
+        const targetSurname = profileConfig?.surname?.trim() || "";
+        const targetCompany = profileConfig?.company?.trim() || "";
+
+        // ========================================================================
         // DYNAMIC MULTI-TENANT PLATFORM LOOKUP ENGINE
         // ========================================================================
-        // Queries the authoritative catalog table to pull real plan parameters for this appId
+        // FIXED: Included monetization_type in the query columns select layer
         const { data: appConfig, error: appQueryError } = await supabaseAdmin
             .from('applications')
-            .select('fee_amount_cents, paystack_plan_id')
+            .select('fee_amount_cents, paystack_plan_id, monetization_type')
             .eq('app_id', appId)
             .maybeSingle();
 
@@ -50,12 +64,27 @@ export async function POST(req) {
             console.warn(`[Hub Billing Guard]: Database query trace warning: ${appQueryError.message}`);
         }
 
-        // Assign core monetization variables dynamically from database rows, fallback to input payload values if blank
-        const dynamicAmount = appConfig?.fee_amount_cents || amount;
+        // FIXED: STRICT MONETIZATION TYPE VALIDATION LAYER
+        // Blocks initialization unless the application row states the platform type is explicitly 'Paid'
+        if (appConfig?.monetization_type !== 'Paid') {
+            return NextResponse.json({
+                success: false,
+                error: `This application cannot process payments. Current billing profile status type is '${appConfig?.monetization_type || 'Free'}'.`
+            }, { status: 403, headers: corsHeaders });
+        }
+
+        // Rely solely on database rows instead of falling back to any payload value
+        const dynamicAmount = appConfig?.fee_amount_cents;
+
+        // Validation check to make sure amount exists in the database before calling Paystack
+        if (!dynamicAmount) {
+            return NextResponse.json({ success: false, error: "Price allocation missing for this application configuration row." }, { status: 422, headers: corsHeaders });
+        }
+
         const globalPlanIdToken = appConfig?.paystack_plan_id ? appConfig.paystack_plan_id.trim() : null;
 
         // Dispatches parameters natively over to Paystack transaction engines
-        const response = await fetch(process.env.PAYSTACK_INITIALIZE_URL, {
+        const response = await fetch(process.env.PAYSTACK_INITIALIZE_URL || "https://api.paystack.co/transaction/initialize", {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${secretKey.trim()}`,
@@ -65,27 +94,38 @@ export async function POST(req) {
                 email: userEmail.trim().toLowerCase(),
                 amount: dynamicAmount,
                 currency: 'ZAR',
-                callback_url: `${baseUrl}/dashboard?stims_app_id=${appId}`,
-                // If a paystack_plan_id is active in the database row, attach it to initialize a subscription
+                callback_url: callbackUrl,
                 ...(globalPlanIdToken && { plan: globalPlanIdToken }),
+
                 metadata: {
                     user_id: userId,
                     app_id: appId,
-                    tier: 'premium'
-                },
-                // INJECTED PERSISTENT CUSTOMER PROFILE METADATA LAYER:
-                // Stores user_id inside customer object arrays so it flows directly into subscription.create events natively
-                customer: {
-                    metadata: {
-                        user_id: userId,
-                        custom_fields: [
-                            {
-                                variable_name: "user_id",
-                                display_name: "User ID",
-                                value: userId
-                            }
-                        ]
-                    }
+                    tier: 'premium',
+                    name: targetName,
+                    surname: targetSurname,
+                    company: targetCompany,
+                    custom_fields: [
+                        {
+                            variable_name: "user_id",
+                            display_name: "User ID",
+                            value: userId
+                        },
+                        {
+                            variable_name: "app_id",
+                            display_name: "App ID",
+                            value: appId
+                        },
+                        {
+                            variable_name: "company_name",
+                            display_name: "Company Name",
+                            value: targetCompany
+                        },
+                        {
+                            variable_name: "customer_name",
+                            display_name: "Customer Name",
+                            value: `${targetName} ${targetSurname}`.trim()
+                        }
+                    ]
                 }
             }),
             cache: 'no-store'

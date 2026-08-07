@@ -47,9 +47,9 @@ export async function POST(req) {
     const eventData = payload.data;
 
     let planCode = eventData.plan?.plan_code || eventData.plan_object?.plan_code || eventData.subscription?.plan?.plan_code;
-    let resolvedAppId = eventData.metadata?.app_id || 'ecoroute';
+    let resolvedAppId = eventData.metadata?.app_id || eventData.plan?.name || eventData.plan_object?.name || eventData.subscription?.plan?.name;
 
-    if (planCode && !eventData.metadata?.app_id) {
+    if (planCode && !resolvedAppId) {
         const { data: appRegister } = await supabaseAdmin
             .from('applications')
             .select('app_id')

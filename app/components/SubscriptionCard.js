@@ -22,6 +22,8 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
     // Assert that the app must be Active in the database and responding to network pings to launch or upgrade
     const isAppLaunchable = appStatus === "Active" && isOnline !== false;
 
+
+
     const handleUpgrade = () => {
         if (isFree || isActiveSubscription || fee === "Custom Quote") return;
         setErrorMsg("");
@@ -56,6 +58,8 @@ export default function SubscriptionCard({ userId, userEmail, user, appTitle, st
                         amount: cents
                     })
                 });
+
+
 
                 const res = await response.json();
                 if (res?.success && res?.url) {
